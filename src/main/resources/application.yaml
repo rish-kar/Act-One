@@ -1,3 +1,28 @@
 spring:
   application:
     name: Act-One
+  config:
+    activate:
+      on-profile: default
+  datasource:
+    url: jdbc:h2:mem:tickets
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+    defer-datasource-initialization: true
+  h2:
+    console:
+      enabled: true
+  sql:
+    init:
+      mode: always
+      data-locations: classpath:data-h2.sql
+logging:
+  level:
+    com.prarambh.act.one: INFO

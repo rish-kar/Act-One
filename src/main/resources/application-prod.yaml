@@ -1,0 +1,12 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://example.com/prod-db
+    username: prod_user
+    password: change-me
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  h2:
+    console:
+      enabled: false
+
