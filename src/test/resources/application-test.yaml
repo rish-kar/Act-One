@@ -6,7 +6,7 @@ spring:
     password:
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: create-drop
     defer-datasource-initialization: true
   sql:
     init:
@@ -14,4 +14,6 @@ spring:
 logging:
   level:
     com.prarambh.act.one: INFO
-
+actone:
+  admin:
+    purge-password: "purged-by-prarambh-admin"

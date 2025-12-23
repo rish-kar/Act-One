@@ -9,7 +9,7 @@
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.prarambh</groupId>
-	<artifactId>act.one</artifactId>
+	<artifactId>Act-One</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>Act-One</name>
 	<description>Central Ticketing System for Prarambh Theatre Group</description>
@@ -40,10 +40,6 @@
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-thymeleaf</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-validation</artifactId>
 		</dependency>
 		<dependency>
@@ -52,7 +48,7 @@
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-webflux</artifactId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
 
 		<dependency>
@@ -72,7 +68,7 @@
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-test-autoconfigure</artifactId>
+			<artifactId>spring-boot-starter-webflux</artifactId>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
@@ -93,51 +89,7 @@
 					<reuseForks>false</reuseForks>
 				</configuration>
 			</plugin>
-
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-clean-plugin</artifactId>
-				<version>3.5.0</version>
-				<configuration>
-					<retryOnError>true</retryOnError>
-					<retryFailedDeletionCount>80</retryFailedDeletionCount>
-					<retryFailedDeletionDelay>200</retryFailedDeletionDelay>
-				</configuration>
-			</plugin>
 		</plugins>
 	</build>
-
-	<profiles>
-		<!-- Optional fallback for Windows file locks: use when mvn clean fails. -->
-		<profile>
-			<id>force-clean</id>
-			<build>
-				<plugins>
-					<plugin>
-						<groupId>org.codehaus.mojo</groupId>
-						<artifactId>exec-maven-plugin</artifactId>
-						<version>3.5.1</version>
-						<executions>
-							<execution>
-								<id>force-delete-target</id>
-								<phase>pre-clean</phase>
-								<goals>
-									<goal>exec</goal>
-								</goals>
-								<configuration>
-									<executable>powershell</executable>
-									<arguments>
-										<argument>-NoProfile</argument>
-										<argument>-Command</argument>
-										<argument>Remove-Item -LiteralPath &quot;${project.build.directory}&quot; -Recurse -Force -ErrorAction SilentlyContinue</argument>
-									</arguments>
-								</configuration>
-							</execution>
-						</executions>
-					</plugin>
-				</plugins>
-			</build>
-		</profile>
-	</profiles>
 
 </project>

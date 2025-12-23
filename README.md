@@ -2,10 +2,15 @@
 
 Simple Spring Boot backend for issuing tickets and validating check-ins (no payments).
 
+## Prerequisites
+
+- Java 21+
+- Maven 3.9+
+
 ## Run locally
 
 ```bash
-./mvnw spring-boot:run
+mvn spring-boot:run
 ```
 
 The app starts on `http://localhost:8080`.

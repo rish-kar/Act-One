@@ -9,4 +9,10 @@ spring:
   h2:
     console:
       enabled: false
+  sql:
+    init:
+      mode: never
 
+actone:
+  admin:
+    purge-password: "purged-by-prarambh-admin"

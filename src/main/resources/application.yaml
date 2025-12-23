@@ -5,13 +5,13 @@ spring:
     activate:
       on-profile: default
   datasource:
-    url: jdbc:h2:mem:tickets
+    url: jdbc:h2:mem:tickets;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
     driver-class-name: org.h2.Driver
     username: sa
     password:
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: create-drop
     properties:
       hibernate:
         format_sql: true
@@ -19,10 +19,22 @@ spring:
   h2:
     console:
       enabled: true
+      path: /h2-console
   sql:
     init:
       mode: always
+      schema-locations: classpath:schema-h2.sql
       data-locations: classpath:data-h2.sql
 logging:
   level:
     com.prarambh.act.one: INFO
+
+actone:
+  admin:
+    purge-password: "purged-by-prarambh-admin"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
