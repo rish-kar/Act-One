@@ -43,6 +43,7 @@ class TicketControllerIntegrationTest {
         assertThat(body.get("status")).isEqualTo("ISSUED");
         assertThat(body.get("showId")).isNotNull();
         assertThat(body.get("showName")).isEqualTo("Test Show");
+        assertThat(body.get("showId").toString()).contains("SHOW-");
     }
 
     @Test
@@ -57,10 +58,10 @@ class TicketControllerIntegrationTest {
                 .getResponseBody();
 
         assertThat(issueBody).isNotNull();
-        String ticketId = issueBody.get("ticketId").toString();
+        String barcodeId = issueBody.get("barcodeId").toString();
 
         Map first = webTestClient.post()
-                .uri("/api/tickets/{ticketId}/checkin", ticketId)
+                .uri("/api/tickets/barcode/{barcodeId}/checkin", barcodeId)
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(Map.class)
@@ -71,7 +72,7 @@ class TicketControllerIntegrationTest {
         assertThat(first.get("result")).isEqualTo("VALID");
 
         Map second = webTestClient.post()
-                .uri("/api/tickets/{ticketId}/checkin", ticketId)
+                .uri("/api/tickets/barcode/{barcodeId}/checkin", barcodeId)
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(Map.class)
@@ -105,7 +106,7 @@ class TicketControllerIntegrationTest {
         // correct password -> ok
         webTestClient.delete()
                 .uri("/api/admin/tickets")
-                .header("X-Admin-Password", "purged-by-prarambh-admin")
+                .header("X-Admin-Password", "prarambh-admin-delhi")
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(Map.class)
@@ -134,8 +135,20 @@ class TicketControllerIntegrationTest {
         assertThat(issueBody).isNotNull();
         String ticketId = issueBody.get("ticketId").toString();
 
+        // Legacy endpoint
         webTestClient.get()
                 .uri("/api/tickets/{ticketId}", ticketId)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(Map.class)
+                .value(body -> {
+                    assertThat(body.get("ticketId").toString()).isEqualTo(ticketId);
+                    assertThat(body.get("showName")).isEqualTo("Test Show");
+                });
+
+        // New explicit ticketId endpoint
+        webTestClient.get()
+                .uri("/api/tickets/by-ticket-id/{ticketId}", ticketId)
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(Map.class)
@@ -177,31 +190,37 @@ class TicketControllerIntegrationTest {
         // set default show name (should also update existing tickets)
         webTestClient.post()
                 .uri("/api/admin/show-name")
-                .header("X-Admin-Password", "purged-by-prarambh-admin")
+                .header("X-Admin-Password", "prarambh-admin-delhi")
                 .bodyValue(Map.of(
                         "showName", "Act One - Special Preview"
                 ))
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(Map.class)
-                .value(body -> assertThat(body.get("defaultShowName")).isEqualTo("Act One - Special Preview"));
+                .value(body -> {
+                    assertThat(body.get("defaultShowName")).isEqualTo("Act One - Special Preview");
+                    assertThat(body.get("showId")).isNotNull();
+                });
 
         // GET default show name should return the same value
         webTestClient.get()
                 .uri("/api/admin/show-name")
-                .header("X-Admin-Password", "purged-by-prarambh-admin")
+                .header("X-Admin-Password", "prarambh-admin-delhi")
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(Map.class)
                 .value(body -> assertThat(body.get("defaultShowName")).isEqualTo("Act One - Special Preview"));
 
-        // existing ticket should now reflect updated showName
+        // existing ticket should now reflect updated showName and showId
         webTestClient.get()
                 .uri("/api/tickets/{ticketId}", existingTicketId)
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(Map.class)
-                .value(body -> assertThat(body.get("showName")).isEqualTo("Act One - Special Preview"));
+                .value(body -> {
+                    assertThat(body.get("showName")).isEqualTo("Act One - Special Preview");
+                    assertThat(body.get("showId")).isNotNull();
+                });
 
         // issue without showName (should use default)
         Map issueBody = webTestClient.post()
@@ -223,7 +242,7 @@ class TicketControllerIntegrationTest {
         // clear default
         webTestClient.post()
                 .uri("/api/admin/show-name")
-                .header("X-Admin-Password", "purged-by-prarambh-admin")
+                .header("X-Admin-Password", "prarambh-admin-delhi")
                 .bodyValue(Map.of(
                         "clear", true
                 ))

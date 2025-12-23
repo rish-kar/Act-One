@@ -49,11 +49,16 @@ public class TicketController {
      */
     @PostMapping("/issue")
     public ResponseEntity<?> issueTicket(@Valid @RequestBody IssueTicketRequest request) {
+        log.info("Issue ticket request received: fullName='{}', email='{}', phoneNumber='{}', showName='{}'",
+                request.fullName(), request.email(), request.phoneNumber(), request.showName());
+
         String resolvedShowName = request.showName();
         if (resolvedShowName == null || resolvedShowName.isBlank()) {
             resolvedShowName = showSettingsService.getDefaultShowName().orElse(null);
+            log.info("No showName provided; resolved from defaultShowName='{}'", resolvedShowName);
         }
         if (resolvedShowName == null || resolvedShowName.isBlank()) {
+            log.warn("Issue ticket rejected: no showName provided and no default is configured");
             return ResponseEntity.badRequest().body(Map.of(
                     "message", "showName is required (or set a default via /api/admin/show-name)"
             ));
@@ -66,7 +71,8 @@ public class TicketController {
         ticket.setPhoneNumber(request.phoneNumber());
 
         Ticket saved = ticketRepository.save(ticket);
-        log.info("Issued ticket {} for show {} ({})", saved.getTicketId(), saved.getShowId(), saved.getShowName());
+        log.info("Ticket issued: ticketId={}, barcodeId={}, showId={}, showName='{}', status={} ",
+                saved.getTicketId(), saved.getBarcodeId(), saved.getShowId(), saved.getShowName(), saved.getStatus());
 
         return ResponseEntity.ok(Map.of(
                 "ticketId", saved.getTicketId(),
@@ -75,6 +81,73 @@ public class TicketController {
                 "showId", saved.getShowId(),
                 "showName", saved.getShowName()
         ));
+    }
+
+    /**
+     * Check in a ticket using its barcode id.
+     *
+     * <p>This is the primary endpoint intended for scanning at the venue.
+     */
+    @PostMapping("/barcode/{barcodeId}/checkin")
+    public ResponseEntity<?> checkInByBarcode(@PathVariable String barcodeId) {
+        log.info("Check-in request received: barcodeId={}", barcodeId);
+
+        Optional<Ticket> ticketOpt = ticketRepository.findByBarcodeId(barcodeId);
+        if (ticketOpt.isEmpty()) {
+            log.warn("Check-in NOT_FOUND: barcodeId={}", barcodeId);
+            return ResponseEntity.ok(Map.of(
+                    "result", "NOT_FOUND",
+                    "message", "Ticket not found"
+            ));
+        }
+
+        Ticket ticket = ticketOpt.get();
+        if (ticket.getStatus() == TicketStatus.USED) {
+            log.info("Check-in ALREADY_USED: barcodeId={}, ticketId={}, usedAtDate={}, usedAtTimeIst={} ",
+                    barcodeId, ticket.getTicketId(), ticket.getUsedAtDate(), TicketResponse.formatIstTime(ticket.getUsedAtTime()));
+            return ResponseEntity.ok(Map.of(
+                    "result", "ALREADY_USED",
+                    "message", "Ticket has already been checked in",
+                    "usedAtDate", ticket.getUsedAtDate(),
+                    "usedAtTimeIst", TicketResponse.formatIstTime(ticket.getUsedAtTime())
+            ));
+        }
+
+        ticket.markUsed();
+        ticketRepository.save(ticket);
+        log.info("Check-in VALID: barcodeId={}, ticketId={}, set status=USED usedAtDate={} usedAtTimeIst={}",
+                barcodeId, ticket.getTicketId(), ticket.getUsedAtDate(), TicketResponse.formatIstTime(ticket.getUsedAtTime()));
+
+        return ResponseEntity.ok(Map.of(
+                "result", "VALID",
+                "message", "Check-in successful",
+                "usedAtDate", ticket.getUsedAtDate(),
+                "usedAtTimeIst", TicketResponse.formatIstTime(ticket.getUsedAtTime())
+        ));
+    }
+
+    /**
+     * Fetch a single ticket by its UUID ticket id.
+     *
+     * <p>This endpoint is intended for admin/debug usage (UUID is not scannable).
+     */
+    @GetMapping("/by-ticket-id/{ticketId}")
+    public ResponseEntity<?> getTicketByTicketId(@PathVariable UUID ticketId) {
+        log.info("Fetch ticket by ticketId request received: ticketId={}", ticketId);
+
+        return ticketRepository.findById(ticketId)
+                .<ResponseEntity<?>>map(ticket -> {
+                    log.info("Fetch ticket by ticketId found: ticketId={}, barcodeId={}, status={}, showId={}, showName='{}'",
+                            ticket.getTicketId(), ticket.getBarcodeId(), ticket.getStatus(), ticket.getShowId(), ticket.getShowName());
+                    return ResponseEntity.ok(TicketResponse.from(ticket));
+                })
+                .orElseGet(() -> {
+                    log.warn("Fetch ticket by ticketId NOT_FOUND: ticketId={}", ticketId);
+                    return ResponseEntity.status(404).body(Map.of(
+                            "message", "Ticket not found",
+                            "ticketId", ticketId
+                    ));
+                });
     }
 
     /**
@@ -89,8 +162,12 @@ public class TicketController {
      */
     @PostMapping("/{ticketId}/checkin")
     public ResponseEntity<?> checkIn(@PathVariable UUID ticketId) {
+        log.warn("Deprecated check-in endpoint used (ticketId). Prefer /api/tickets/barcode/{barcodeId}/checkin. ticketId={}", ticketId);
+        log.info("Check-in request received: ticketId={}", ticketId);
+
         Optional<Ticket> ticketOpt = ticketRepository.findById(ticketId);
         if (ticketOpt.isEmpty()) {
+            log.warn("Check-in NOT_FOUND: ticketId={}", ticketId);
             return ResponseEntity.ok(Map.of(
                     "result", "NOT_FOUND",
                     "message", "Ticket not found"
@@ -99,6 +176,8 @@ public class TicketController {
 
         Ticket ticket = ticketOpt.get();
         if (ticket.getStatus() == TicketStatus.USED) {
+            log.info("Check-in ALREADY_USED: ticketId={}, usedAtDate={}, usedAtTimeIst={} ",
+                    ticketId, ticket.getUsedAtDate(), TicketResponse.formatIstTime(ticket.getUsedAtTime()));
             return ResponseEntity.ok(Map.of(
                     "result", "ALREADY_USED",
                     "message", "Ticket has already been checked in",
@@ -109,7 +188,8 @@ public class TicketController {
 
         ticket.markUsed();
         ticketRepository.save(ticket);
-        log.info("Checked-in ticket {}", ticketId);
+        log.info("Check-in VALID: ticketId={}, set status=USED usedAtDate={} usedAtTimeIst={}",
+                ticketId, ticket.getUsedAtDate(), TicketResponse.formatIstTime(ticket.getUsedAtTime()));
 
         return ResponseEntity.ok(Map.of(
                 "result", "VALID",
@@ -124,6 +204,8 @@ public class TicketController {
      */
     @GetMapping("/all")
     public ResponseEntity<List<TicketResponse>> getAllTickets() {
+        log.info("Fetch all tickets request received");
+
         List<TicketResponse> tickets = ticketRepository
                 .findAll(Sort.by(
                         Sort.Order.desc("createdAtDate"),
@@ -133,6 +215,7 @@ public class TicketController {
                 .map(TicketResponse::from)
                 .toList();
 
+        log.info("Fetch all tickets completed: count={}", tickets.size());
         return ResponseEntity.ok(tickets);
     }
 
@@ -141,12 +224,21 @@ public class TicketController {
      */
     @GetMapping("/{ticketId}")
     public ResponseEntity<?> getTicketById(@PathVariable UUID ticketId) {
+        log.info("Fetch ticket by id request received: ticketId={}", ticketId);
+
         return ticketRepository.findById(ticketId)
-                .<ResponseEntity<?>>map(ticket -> ResponseEntity.ok(TicketResponse.from(ticket)))
-                .orElseGet(() -> ResponseEntity.status(404).body(Map.of(
-                        "message", "Ticket not found",
-                        "ticketId", ticketId
-                )));
+                .<ResponseEntity<?>>map(ticket -> {
+                    log.info("Fetch ticket by id found: ticketId={}, status={}, showId={}, showName='{}'",
+                            ticket.getTicketId(), ticket.getStatus(), ticket.getShowId(), ticket.getShowName());
+                    return ResponseEntity.ok(TicketResponse.from(ticket));
+                })
+                .orElseGet(() -> {
+                    log.warn("Fetch ticket by id NOT_FOUND: ticketId={}", ticketId);
+                    return ResponseEntity.status(404).body(Map.of(
+                            "message", "Ticket not found",
+                            "ticketId", ticketId
+                    ));
+                });
     }
 
     /**
@@ -167,7 +259,7 @@ public class TicketController {
      */
     public record TicketResponse(
             UUID ticketId,
-            UUID barcodeId,
+            String barcodeId,
             String showId,
             String showName,
             String fullName,

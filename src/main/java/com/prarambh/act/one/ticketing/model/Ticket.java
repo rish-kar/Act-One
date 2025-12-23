@@ -1,5 +1,6 @@
 package com.prarambh.act.one.ticketing.model;
 
+import com.prarambh.act.one.ticketing.service.ShowIdGenerator;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
@@ -13,6 +14,7 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Ticket entity stored in the database.
@@ -21,11 +23,12 @@ import java.util.UUID;
  * <ul>
  *   <li>All timestamps are captured in IST ({@code Asia/Kolkata}).</li>
  *   <li>Dates and times are stored as separate columns.</li>
- *   <li>{@code barcodeId} is a separate UUID intended to be encoded as a barcode/QR code.</li>
+ *   <li>{@code barcodeId} is a short identifier intended to be encoded as a barcode/QR code.</li>
  * </ul>
  */
 @Entity
 @Table(name = "tickets")
+@Slf4j
 public class Ticket {
 
     /** Primary key identifier for the ticket. */
@@ -78,9 +81,9 @@ public class Ticket {
     @Column
     private LocalTime usedAtTime;
 
-    /** UUID intended for barcode/QR representation and scanning at the venue. */
-    @Column(nullable = false)
-    private UUID barcodeId;
+    /** Short barcode identifier (18 characters including hyphens), intended for barcode/QR representation. */
+    @Column(nullable = false, length = 18)
+    private String barcodeId;
 
     public UUID getTicketId() {
         return ticketId;
@@ -170,11 +173,11 @@ public class Ticket {
         this.usedAtTime = usedAtTime;
     }
 
-    public UUID getBarcodeId() {
+    public String getBarcodeId() {
         return barcodeId;
     }
 
-    public void setBarcodeId(UUID barcodeId) {
+    public void setBarcodeId(String barcodeId) {
         this.barcodeId = barcodeId;
     }
 
@@ -187,6 +190,7 @@ public class Ticket {
         this.status = TicketStatus.USED;
         this.usedAtDate = nowIst.toLocalDate();
         this.usedAtTime = nowIst.toLocalTime();
+        log.info("Ticket marked USED: ticketId={}, usedAtDate={}, usedAtTime={} (stored via converter)", ticketId, usedAtDate, usedAtTime);
     }
 
     /**
@@ -197,11 +201,14 @@ public class Ticket {
         if (ticketId == null) {
             ticketId = UUID.randomUUID();
         }
-        if (barcodeId == null) {
-            barcodeId = UUID.randomUUID();
+        if (barcodeId == null || barcodeId.isBlank()) {
+            // Single-line: generate UUID then keep only first 18 chars (includes hyphens).
+            barcodeId = UUID.randomUUID().toString().substring(0, 18);
         }
-        if (showId == null || showId.isBlank()) {
-            showId = "SHOW-" + UUID.randomUUID();
+
+        // Keep showId short and related to showName.
+        if ((showId == null || showId.isBlank()) && showName != null && !showName.isBlank()) {
+            showId = ShowIdGenerator.fromShowName(showName);
         }
 
         ZoneId ist = ZoneId.of("Asia/Kolkata");
@@ -216,5 +223,8 @@ public class Ticket {
         if (status == null) {
             status = TicketStatus.ISSUED;
         }
+
+        log.info("Ticket pre-persist initialized: ticketId={}, barcodeId={}, showId={}, showName='{}', status={}, createdAtDate={}, createdAtTime={} ",
+                ticketId, barcodeId, showId, showName, status, createdAtDate, createdAtTime);
     }
 }

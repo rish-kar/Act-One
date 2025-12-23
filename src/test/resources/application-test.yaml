@@ -16,4 +16,4 @@ logging:
     com.prarambh.act.one: INFO
 actone:
   admin:
-    purge-password: "purged-by-prarambh-admin"
+    purge-password: "prarambh-admin-delhi"

@@ -47,7 +47,12 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<?> handleNoResourceFound(NoResourceFoundException ex) {
-        log.debug("Static resource not found: {}", ex.getResourcePath());
+        // Browsers request /favicon.ico frequently; keep this out of ERROR logs.
+        if ("favicon.ico".equalsIgnoreCase(ex.getResourcePath())) {
+            log.debug("Ignored missing favicon request");
+        } else {
+            log.debug("Static resource not found: {}", ex.getResourcePath());
+        }
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(Map.of("message", "Resource not found"));
     }
@@ -57,7 +62,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<?> handleGeneric(Exception ex) {
-        log.error("Unhandled exception", ex);
+        log.error("Unhandled exception type={} message={}", ex.getClass().getName(), ex.getMessage(), ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(Map.of("message", "Internal server error"));
     }

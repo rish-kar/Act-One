@@ -5,7 +5,7 @@ DROP TABLE IF EXISTS tickets;
 
 CREATE TABLE tickets (
   ticket_id UUID PRIMARY KEY,
-  barcode_id UUID NOT NULL,
+  barcode_id VARCHAR(18) NOT NULL,
 
   show_id VARCHAR(255),
   show_name VARCHAR(255) NOT NULL,
@@ -20,4 +20,3 @@ CREATE TABLE tickets (
   used_at_date DATE,
   used_at_time VARCHAR(16)
 );
-

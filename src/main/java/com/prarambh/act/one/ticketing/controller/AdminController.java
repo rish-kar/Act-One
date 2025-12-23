@@ -1,6 +1,7 @@
 package com.prarambh.act.one.ticketing.controller;
 
 import com.prarambh.act.one.ticketing.repository.TicketRepository;
+import com.prarambh.act.one.ticketing.service.ShowIdGenerator;
 import com.prarambh.act.one.ticketing.service.ShowSettingsService;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -50,10 +51,14 @@ public class AdminController {
         if (purgePassword == null || purgePassword.isBlank()) {
             return false;
         }
-        String provided = (headerPassword != null && !headerPassword.isBlank())
+        boolean usedHeader = headerPassword != null && !headerPassword.isBlank();
+        String provided = usedHeader
                 ? headerPassword
                 : (bodyPassword != null && !bodyPassword.isBlank() ? bodyPassword : null);
-        return provided != null && purgePassword.equals(provided);
+
+        boolean ok = provided != null && purgePassword.equals(provided);
+        log.debug("Admin password validation: providedVia={}, valid={}", usedHeader ? "header" : "body/none", ok);
+        return ok;
     }
 
     /**
@@ -66,6 +71,8 @@ public class AdminController {
             @RequestHeader(value = "X-Admin-Password", required = false) String headerPassword,
             @RequestBody(required = false) PurgeRequest body
     ) {
+        log.warn("Admin purge request received (tickets delete-all)");
+
         if (purgePassword == null || purgePassword.isBlank()) {
             log.warn("Purge endpoint called but no purge password is configured; refusing.");
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
@@ -73,13 +80,14 @@ public class AdminController {
         }
 
         if (!isAdminPasswordValid(headerPassword, body != null ? body.password() : null)) {
+            log.warn("Admin purge rejected: invalid password");
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("message", "Invalid admin password"));
         }
 
         long before = ticketRepository.count();
         ticketRepository.deleteAllInBatch();
-        log.warn("Admin purge executed. Deleted {} tickets.", before);
+        log.warn("Admin purge executed successfully: deletedCount={}", before);
 
         return ResponseEntity.ok(Map.of(
                 "message", "All tickets deleted",
@@ -95,18 +103,24 @@ public class AdminController {
             @RequestHeader(value = "X-Admin-Password", required = false) String headerPassword,
             @RequestBody(required = false) PurgeRequest body
     ) {
+        log.info("Admin get default show-name request received");
+
         if (purgePassword == null || purgePassword.isBlank()) {
+            log.warn("Admin get show-name refused: admin endpoints not enabled");
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("message", "Admin endpoints are not enabled"));
         }
         if (!isAdminPasswordValid(headerPassword, body != null ? body.password() : null)) {
+            log.warn("Admin get show-name rejected: invalid password");
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("message", "Invalid admin password"));
         }
 
-        // NOTE: Map.of would throw if the value is null.
+        String current = showSettingsService.getDefaultShowName().orElse(null);
+        log.info("Admin get show-name returned: defaultShowName='{}'", current);
+
         Map<String, Object> resp = new LinkedHashMap<>();
-        resp.put("defaultShowName", showSettingsService.getDefaultShowName().orElse(null));
+        resp.put("defaultShowName", current);
         return ResponseEntity.ok(resp);
     }
 
@@ -122,12 +136,18 @@ public class AdminController {
             @RequestHeader(value = "X-Admin-Password", required = false) String headerPassword,
             @RequestBody(required = false) ShowNameRequest body
     ) {
+        log.warn("Admin set default show-name request received: clear={}, showName='{}'",
+                body != null ? body.clear() : null,
+                body != null ? body.showName() : null);
+
         if (purgePassword == null || purgePassword.isBlank()) {
+            log.warn("Admin set show-name refused: admin endpoints not enabled");
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("message", "Admin endpoints are not enabled"));
         }
 
         if (!isAdminPasswordValid(headerPassword, body != null ? body.password() : null)) {
+            log.warn("Admin set show-name rejected: invalid password");
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("message", "Invalid admin password"));
         }
@@ -145,6 +165,7 @@ public class AdminController {
 
         String showName = body != null ? body.showName() : null;
         if (showName == null || showName.isBlank()) {
+            log.warn("Admin set show-name rejected: missing showName while clear!=true");
             return ResponseEntity.badRequest().body(Map.of(
                     "message", "showName is required unless clear=true"
             ));
@@ -153,12 +174,14 @@ public class AdminController {
         showSettingsService.setDefaultShowName(showName);
         String trimmed = showName.trim();
 
-        int updated = ticketRepository.updateShowNameForAll(trimmed);
-        log.warn("Default show name set by admin: {} (updated {} existing tickets)", trimmed, updated);
+        String showId = ShowIdGenerator.fromShowName(trimmed);
+        int updated = ticketRepository.updateShowNameAndShowIdForAll(trimmed, showId);
+        log.warn("Default show name set by admin: defaultShowName='{}', showId={}, updatedTickets={}", trimmed, showId, updated);
 
         return ResponseEntity.ok(Map.of(
                 "message", "Default show name set",
                 "defaultShowName", trimmed,
+                "showId", showId,
                 "updatedTickets", updated
         ));
     }

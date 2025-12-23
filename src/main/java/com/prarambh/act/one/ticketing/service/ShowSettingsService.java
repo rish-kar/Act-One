@@ -2,6 +2,7 @@ package com.prarambh.act.one.ticketing.service;
 
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Service;
  * <p>Persistence: this value is NOT persisted to the database; it resets on application restart.
  */
 @Service
+@Slf4j
 public class ShowSettingsService {
 
     private final AtomicReference<String> defaultShowName = new AtomicReference<>();
@@ -30,7 +32,9 @@ public class ShowSettingsService {
      * Sets the default show name.
      */
     public void setDefaultShowName(String showName) {
-        defaultShowName.set(showName == null ? null : showName.trim());
+        String trimmed = showName == null ? null : showName.trim();
+        defaultShowName.set(trimmed);
+        log.info("Default showName updated in memory: '{}'", trimmed);
     }
 
     /**
@@ -38,5 +42,6 @@ public class ShowSettingsService {
      */
     public void clearDefaultShowName() {
         defaultShowName.set(null);
+        log.info("Default showName cleared in memory");
     }
 }
