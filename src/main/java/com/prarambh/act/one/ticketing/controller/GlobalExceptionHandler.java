@@ -57,8 +57,8 @@ public class GlobalExceptionHandler {
         
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(Map.of(
-                        "message", "Invalid " + paramName,
-                        "detail", "Parameter '" + paramName + "' must be a valid " + requiredType
+                        "message", "Invalid " + requiredType + " format for parameter: " + paramName,
+                        "detail", "The value '" + ex.getValue() + "' cannot be converted to " + requiredType
                 ));
     }
 

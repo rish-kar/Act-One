@@ -253,7 +253,7 @@ class TicketControllerIntegrationTest {
                 .expectBody(Map.class)
                 .value(body -> {
                     assertThat(body.get("message")).isNotNull();
-                    assertThat(body.get("message").toString()).contains("Invalid ticketId");
+                    assertThat(body.get("message").toString()).contains("Invalid UUID format for parameter: ticketId");
                 });
     }
 
