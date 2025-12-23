@@ -242,6 +242,21 @@ class TicketControllerIntegrationTest {
                 .expectStatus().isBadRequest();
     }
 
+    @Test
+    void checkInWithInvalidUuidReturns400() {
+        String invalidUuid = "2acc227e-716c-42fc"; // incomplete UUID
+        
+        webTestClient.post()
+                .uri("/api/tickets/{ticketId}/checkin", invalidUuid)
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectBody(Map.class)
+                .value(body -> {
+                    assertThat(body.get("message")).isNotNull();
+                    assertThat(body.get("message").toString()).contains("Invalid ticketId");
+                });
+    }
+
     private Map<String, String> issueRequestPayload() {
         return Map.of(
                 "showName", "Test Show",
