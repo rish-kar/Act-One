@@ -49,9 +49,13 @@ public class TicketIssuanceService {
 
             Ticket saved = ticketRepository.save(t);
             log.debug("event=ticket_issued_persisted ticketId={} purchaseCount={} index={}", saved.getTicketId(), count, i + 1);
+            // keep per-ticket event for backwards compatibility / other listeners
             eventPublisher.publishEvent(new TicketIssuedEvent(saved));
             savedTickets.add(saved);
         }
+
+        // NEW: purchase-level event (one per API request)
+        eventPublisher.publishEvent(new TicketPurchaseIssuedEvent(List.copyOf(savedTickets)));
 
         return savedTickets;
     }

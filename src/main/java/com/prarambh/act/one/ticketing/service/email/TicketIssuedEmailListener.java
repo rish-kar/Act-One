@@ -9,7 +9,12 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
-/** Sends a confirmation email after a ticket is issued and the transaction commits. */
+/**
+ * Legacy per-ticket email listener.
+ *
+ * <p>Kept for compatibility but disabled to prevent multiple emails per purchase.
+ * Purchase-level emails are sent by {@link TicketPurchaseEmailListener}.
+ */
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -21,26 +26,8 @@ public class TicketIssuedEmailListener {
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onTicketIssued(TicketIssuedEvent event) {
-        if (!emailProperties.enabled()) {
-            log.debug("event=ticket_issue_email_skipped reason=disabled");
-            return;
-        }
-
-        Ticket t = event.ticket();
-        String to = t.getEmail();
-        if (to == null || to.isBlank()) {
-            log.info("event=ticket_issue_email_skipped reason=missing_email ticketId={}", t.getTicketId());
-            return;
-        }
-
-        String subject = emailProperties.subject() == null || emailProperties.subject().isBlank()
-                ? "Your ticket has been issued"
-                : emailProperties.subject();
-
-        log.info("event=ticket_issue_email_attempt ticketId={} to={} subject={}", t.getTicketId(), to, subject);
-
-        String body = buildBody(t);
-        emailSender.send(to, subject, body);
+        // Disabled: avoid sending one email per ticket row.
+        log.debug("event=ticket_issue_email_skipped reason=use_purchase_email_listener ticketId={}", event.ticket().getTicketId());
     }
 
     private String buildBody(Ticket t) {

@@ -4,6 +4,8 @@ import com.prarambh.act.one.ActOneApplication;
 import com.prarambh.act.one.ticketing.model.Ticket;
 import com.prarambh.act.one.ticketing.service.TicketIssuanceService;
 import com.prarambh.act.one.ticketing.service.email.EmailSender;
+import com.prarambh.act.one.ticketing.repository.TicketRepository;
+import com.prarambh.act.one.ticketing.service.TicketCheckInService;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -38,23 +40,37 @@ class TicketIssuedEmailListenerTest {
         private final List<String> deliveries = new ArrayList<>();
 
         @Override
-        public void send(String to, String subject, String body) {
-            deliveries.add(to + "|" + subject);
+        public synchronized void send(String to, String subject, String body) {
+            deliveries.add(to + "|" + subject + "|" + body);
         }
 
         boolean awaitDeliveryCount(int expected, long timeoutMs) throws InterruptedException {
             long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs);
             while (System.nanoTime() < deadline) {
-                if (deliveries.size() >= expected) {
+                if (deliveryCount() >= expected) {
                     return true;
                 }
                 Thread.sleep(25);
             }
-            return deliveries.size() >= expected;
+            return deliveryCount() >= expected;
         }
 
-        int deliveryCount() {
+        synchronized int deliveryCount() {
             return deliveries.size();
+        }
+
+        synchronized void reset() {
+            deliveries.clear();
+        }
+
+        synchronized String lastBody() {
+            if (deliveries.isEmpty()) {
+                return null;
+            }
+            String last = deliveries.get(deliveries.size() - 1);
+            int first = last.indexOf('|');
+            int second = last.indexOf('|', first + 1);
+            return second >= 0 ? last.substring(second + 1) : null;
         }
     }
 
@@ -62,7 +78,18 @@ class TicketIssuedEmailListenerTest {
     TicketIssuanceService ticketIssuanceService;
 
     @Autowired
+    TicketCheckInService ticketCheckInService;
+
+    @Autowired
+    TicketRepository ticketRepository;
+
+    @Autowired
     TestEmailSender emailSender;
+
+    @org.junit.jupiter.api.BeforeEach
+    void resetEmailSender() {
+        emailSender.reset();
+    }
 
     @Test
     void sendsEmailAfterTicketIsIssued_whenEmailEnabledAndEmailPresent() throws Exception {
@@ -80,6 +107,22 @@ class TicketIssuedEmailListenerTest {
     }
 
     @Test
+    void sendsOneEmailPerPurchase_whenEmailEnabledAndEmailPresent() throws Exception {
+        Ticket t = new Ticket();
+        t.setTicketId(UUID.randomUUID());
+        t.setShowName("Test Show");
+        t.setFullName("Test User");
+        t.setEmail("test@example.com");
+        t.setPhoneNumber("+10000000000");
+        t.setTicketCount(3);
+
+        ticketIssuanceService.issueTickets(t);
+
+        org.junit.jupiter.api.Assertions.assertTrue(emailSender.awaitDeliveryCount(1, 2000));
+        org.junit.jupiter.api.Assertions.assertEquals(1, emailSender.deliveryCount());
+    }
+
+    @Test
     void doesNotSendEmail_whenEmailMissing() throws Exception {
         Ticket t = new Ticket();
         t.setTicketId(UUID.randomUUID());
@@ -87,10 +130,51 @@ class TicketIssuedEmailListenerTest {
         t.setFullName("Test User");
         t.setEmail(null);
         t.setPhoneNumber("+10000000000");
+        t.setTicketCount(3);
 
-        ticketIssuanceService.issueTicket(t);
+        ticketIssuanceService.issueTickets(t);
 
         org.junit.jupiter.api.Assertions.assertFalse(emailSender.awaitDeliveryCount(1, 400));
         org.junit.jupiter.api.Assertions.assertEquals(0, emailSender.deliveryCount());
+    }
+
+    @Test
+    void checkInEmailIsSentOnlyAfterLastTicketInGroupIsUsed() throws Exception {
+        Ticket t = new Ticket();
+        t.setShowName("Test Show");
+        t.setFullName("Test User");
+        t.setEmail("test@example.com");
+        t.setPhoneNumber("+10000000000");
+        t.setTicketCount(3);
+
+        List<Ticket> issued = ticketIssuanceService.issueTickets(t);
+        org.junit.jupiter.api.Assertions.assertTrue(emailSender.awaitDeliveryCount(1, 2000));
+        org.junit.jupiter.api.Assertions.assertEquals(1, emailSender.deliveryCount());
+
+        // Reset so we only count check-in emails
+        emailSender.reset();
+
+        // check-in first two tickets -> no new email
+        ticketCheckInService.checkInByBarcode(issued.get(0).getBarcodeId());
+        org.junit.jupiter.api.Assertions.assertFalse(emailSender.awaitDeliveryCount(1, 300));
+
+        ticketCheckInService.checkInByBarcode(issued.get(1).getBarcodeId());
+        org.junit.jupiter.api.Assertions.assertFalse(emailSender.awaitDeliveryCount(1, 300));
+
+        // check-in last ticket -> emits one email
+        ticketCheckInService.checkInByBarcode(issued.get(2).getBarcodeId());
+        org.junit.jupiter.api.Assertions.assertTrue(emailSender.awaitDeliveryCount(1, 2000));
+        org.junit.jupiter.api.Assertions.assertEquals(1, emailSender.deliveryCount());
+
+        String body = emailSender.lastBody();
+        org.assertj.core.api.Assertions.assertThat(body).contains("Your check-in is confirmed");
+        for (Ticket it : issued) {
+            org.assertj.core.api.Assertions.assertThat(body).contains(it.getBarcodeId());
+        }
+
+        // Sanity: no ISSUED tickets remain for group
+        long remaining = ticketRepository.countByEmailIgnoreCaseAndPhoneNumberIgnoreCaseAndShowIdAndStatus(
+                t.getEmail(), t.getPhoneNumber(), issued.get(0).getShowId(), com.prarambh.act.one.ticketing.model.TicketStatus.ISSUED);
+        org.junit.jupiter.api.Assertions.assertEquals(0, remaining);
     }
 }

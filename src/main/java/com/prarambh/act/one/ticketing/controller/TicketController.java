@@ -4,6 +4,7 @@ import com.prarambh.act.one.ticketing.model.Ticket;
 import com.prarambh.act.one.ticketing.model.TicketStatus;
 import com.prarambh.act.one.ticketing.repository.TicketRepository;
 import com.prarambh.act.one.ticketing.service.ShowSettingsService;
+import com.prarambh.act.one.ticketing.service.TicketCheckInService;
 import com.prarambh.act.one.ticketing.service.TicketIssuanceService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
@@ -41,6 +42,7 @@ public class TicketController {
     private final TicketRepository ticketRepository;
     private final ShowSettingsService showSettingsService;
     private final TicketIssuanceService ticketIssuanceService;
+    private final TicketCheckInService ticketCheckInService;
 
     /**
      * Issue a ticket.
@@ -132,16 +134,17 @@ public class TicketController {
             ));
         }
 
-        ticket.markUsed();
-        ticketRepository.save(ticket);
+        // NEW: check-in through service (publishes check-in email event)
+        Ticket saved = ticketCheckInService.checkInByBarcode(barcodeId).orElseThrow();
+
         log.info("Check-in VALID: barcodeId={}, ticketId={}, set status=USED usedAtDate={} usedAtTimeIst={}",
-                barcodeId, ticket.getTicketId(), ticket.getUsedAtDate(), TicketResponse.formatIstTime(ticket.getUsedAtTime()));
+                barcodeId, saved.getTicketId(), saved.getUsedAtDate(), TicketResponse.formatIstTime(saved.getUsedAtTime()));
 
         return ResponseEntity.ok(Map.of(
                 "result", "VALID",
                 "message", "Check-in successful",
-                "usedAtDate", ticket.getUsedAtDate(),
-                "usedAtTimeIst", TicketResponse.formatIstTime(ticket.getUsedAtTime())
+                "usedAtDate", saved.getUsedAtDate(),
+                "usedAtTimeIst", TicketResponse.formatIstTime(saved.getUsedAtTime())
         ));
     }
 
