@@ -1,5 +1,6 @@
 package com.prarambh.act.one;
 
+import com.prarambh.act.one.ticketing.service.card.TicketCardProperties;
 import com.prarambh.act.one.ticketing.service.email.EmailProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -9,7 +10,10 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
  * Entry point for the Act-One Spring Boot application.
  */
 @SpringBootApplication(scanBasePackages = "com.prarambh.act.one")
-@EnableConfigurationProperties(EmailProperties.class)
+@EnableConfigurationProperties({
+        EmailProperties.class,
+        TicketCardProperties.class
+})
 public class ActOneApplication {
 
 	/**

@@ -65,6 +65,10 @@ actone:
     subject: "Your ticket has been issued"
     fromName: "Act-One"
     from: ${ACTONE_EMAIL_FROM:${ACTONE_SMTP_USERNAME:}}
+  ticket-card:
+    enabled: true
+    outputDir: .
+    templateResource: "classpath:/static/Card.jpeg"
 
 management:
   endpoints:

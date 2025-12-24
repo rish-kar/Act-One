@@ -81,7 +81,7 @@ public class Ticket {
     @Column
     private LocalTime usedAtTime;
 
-    /** Short barcode identifier (18 characters including hyphens), intended for barcode/QR representation. */
+    /** Short barcode identifier intended for barcode representation. Stored as exactly 18 characters. */
     @Column(nullable = false, length = 18)
     private String barcodeId;
 
@@ -187,7 +187,24 @@ public class Ticket {
     }
 
     public void setBarcodeId(String barcodeId) {
-        this.barcodeId = barcodeId;
+        if (barcodeId == null) {
+            this.barcodeId = null;
+            return;
+        }
+        this.barcodeId = normalizeBarcodeId18(barcodeId);
+    }
+
+    private static String normalizeBarcodeId18(String input) {
+        String s = input.trim().replace("-", "").replace(" ", "");
+        if (s.length() == 18) {
+            return s;
+        }
+        if (s.length() > 18) {
+            return s.substring(0, 18);
+        }
+        // If shorter than 18, append UUID hex to reach 18.
+        String extra = UUID.randomUUID().toString().replace("-", "");
+        return (s + extra).substring(0, 18);
     }
 
     public int getTicketCount() {
@@ -219,8 +236,11 @@ public class Ticket {
             ticketId = UUID.randomUUID();
         }
         if (barcodeId == null || barcodeId.isBlank()) {
-            // Single-line: generate UUID then keep only first 18 chars (includes hyphens).
-            barcodeId = UUID.randomUUID().toString().substring(0, 18);
+            // Generate and store barcodeId as exactly 18 characters (hyphen-free).
+            barcodeId = UUID.randomUUID().toString().replace("-", "").substring(0, 18);
+        } else {
+            // Ensure any externally provided barcodeId is normalized.
+            barcodeId = normalizeBarcodeId18(barcodeId);
         }
 
         // Keep showId short and related to showName.

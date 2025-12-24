@@ -3,7 +3,10 @@ package com.prarambh.act.one.ticketing.service.email;
 import com.prarambh.act.one.ticketing.model.Ticket;
 import com.prarambh.act.one.ticketing.service.TicketPurchaseCheckedInEvent;
 import com.prarambh.act.one.ticketing.service.TicketPurchaseIssuedEvent;
+import com.prarambh.act.one.ticketing.service.card.TicketCardGenerator;
+import java.nio.file.Path;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,6 +25,7 @@ public class TicketPurchaseEmailListener {
 
     private final EmailSender emailSender;
     private final EmailProperties emailProperties;
+    private final TicketCardGenerator ticketCardGenerator;
 
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -49,7 +53,21 @@ public class TicketPurchaseEmailListener {
                 : emailProperties.subject();
 
         log.info("event=purchase_issue_email_attempt to={} ticketCount={} firstTicketId={}", to, tickets.size(), first.getTicketId());
-        emailSender.send(to, subject, buildIssuedBody(tickets));
+
+        // Generate one PNG per ticket and attach.
+        List<EmailSender.EmailAttachment> attachments = new ArrayList<>();
+        for (Ticket t : tickets) {
+            try {
+                Path pngPath = ticketCardGenerator.generateTicketCardPng(t);
+                if (pngPath != null) {
+                    attachments.add(new EmailSender.EmailAttachment("ticket-" + t.getTicketId() + ".png", "image/png", pngPath));
+                }
+            } catch (Exception e) {
+                log.error("event=ticket_card_generation_failed ticketId={} barcodeId={} error={}", t.getTicketId(), t.getBarcodeId(), e.toString());
+            }
+        }
+
+        emailSender.send(to, subject, buildIssuedBody(tickets), attachments);
     }
 
     @Async
