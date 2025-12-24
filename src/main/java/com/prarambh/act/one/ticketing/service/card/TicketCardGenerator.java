@@ -182,38 +182,56 @@ public class TicketCardGenerator {
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-        // Pick a readable font size that fits in the box.
-        int maxFontSize = 26;
-        int minFontSize = 16;
-        Font font = null;
-        TextLayout layout = null;
-        FontRenderContext frc = g.getFontRenderContext();
+        try {
+            // Two-line label within the same bounding box.
+            String line1 = "Ticket Number:";
+            String line2 = ticketId;
 
-        for (int size = maxFontSize; size >= minFontSize; size--) {
-            Font candidate = new Font("SansSerif", Font.BOLD, size);
-            TextLayout tl = new TextLayout(ticketId, candidate, frc);
-            double w = tl.getBounds().getWidth();
-            double h = tl.getBounds().getHeight();
-            if (w <= (TICKET_ID_W - 6) && h <= (TICKET_ID_H - 6)) {
-                font = candidate;
-                layout = tl;
-                break;
+            FontRenderContext frc = g.getFontRenderContext();
+
+            // Choose font sizes that fit the box (simple conservative defaults).
+            Font font1 = new Font("SansSerif", Font.BOLD, 22);
+            Font font2 = new Font("SansSerif", Font.BOLD, 22);
+
+            TextLayout layout1 = new TextLayout(line1, font1, frc);
+            TextLayout layout2 = new TextLayout(line2, font2, frc);
+
+            double w1 = layout1.getBounds().getWidth();
+            double h1 = layout1.getBounds().getHeight();
+            double w2 = layout2.getBounds().getWidth();
+            double h2 = layout2.getBounds().getHeight();
+
+            // If the UUID line doesn't fit, shrink it a bit (down to 16).
+            for (int size = 22; size >= 16 && w2 > (TICKET_ID_W - 6); size--) {
+                font2 = new Font("SansSerif", Font.BOLD, size);
+                layout2 = new TextLayout(line2, font2, frc);
+                w2 = layout2.getBounds().getWidth();
+                h2 = layout2.getBounds().getHeight();
+            }
+            double lineGap = 9;
+            double moveUpPx = 2;
+            double totalH = h1 + lineGap + h2;
+            double startY = TICKET_ID_Y1 + (TICKET_ID_H - totalH) / 2.0 - moveUpPx;
+
+            float x1 = (float) (TICKET_ID_X1 + (TICKET_ID_W - w1) / 2.0);
+            float y1 = (float) (startY - layout1.getBounds().getY());
+
+            float x2 = (float) (TICKET_ID_X1 + (TICKET_ID_W - w2) / 2.0);
+            float y2 = (float) (startY + h1 + lineGap - layout2.getBounds().getY());
+
+            drawOutlinedText(g, layout1, x1, y1);
+            drawOutlinedText(g, layout2, x2, y2);
+        } finally {
+            if (oldTextAa != null) {
+                g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, oldTextAa);
+            }
+            if (oldAa != null) {
+                g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, oldAa);
             }
         }
-        if (font == null) {
-            font = new Font("SansSerif", Font.BOLD, minFontSize);
-            layout = new TextLayout(ticketId, font, frc);
-        }
+    }
 
-        double textW = layout.getBounds().getWidth();
-        double textH = layout.getBounds().getHeight();
-
-        // Center-align horizontally in the box.
-        float x = (float) (TICKET_ID_X1 + (TICKET_ID_W - textW) / 2.0);
-
-        // Vertically centered in the box; baseline derived from TextLayout.
-        float y = (float) (TICKET_ID_Y1 + (TICKET_ID_H - textH) / 2.0 - layout.getBounds().getY());
-
+    private static void drawOutlinedText(Graphics2D g, TextLayout layout, float x, float y) {
         Shape outline = layout.getOutline(java.awt.geom.AffineTransform.getTranslateInstance(x, y));
 
         // Dark stroke outline for contrast.
@@ -224,13 +242,6 @@ public class TicketCardGenerator {
         // White fill.
         g.setColor(new Color(255, 255, 255, 245));
         g.fill(outline);
-
-        if (oldTextAa != null) {
-            g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, oldTextAa);
-        }
-        if (oldAa != null) {
-            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, oldAa);
-        }
     }
 
     private Path resolveOutputDir() {
