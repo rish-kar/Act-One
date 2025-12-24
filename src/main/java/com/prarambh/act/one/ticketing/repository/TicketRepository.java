@@ -37,4 +37,11 @@ public interface TicketRepository extends JpaRepository<Ticket, UUID> {
 
     /** Fetch all tickets for a best-effort purchase grouping. */
     List<Ticket> findByEmailIgnoreCaseAndPhoneNumberIgnoreCaseAndShowId(String email, String phoneNumber, String showId);
+
+    /** Find all tickets where phoneNumber ends with the given 10 digits. */
+    List<Ticket> findByPhoneNumberEndingWith(String last10Digits);
+
+    /** Find tickets whose ticketId UUID string ends with the given suffix (case-insensitive). */
+    @Query("select t from Ticket t where lower(cast(t.ticketId as string)) like concat('%', lower(:suffix))")
+    List<Ticket> findByTicketIdSuffix(String suffix);
 }
