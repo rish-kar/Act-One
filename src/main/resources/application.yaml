@@ -28,6 +28,26 @@ spring:
       mode: always
       schema-locations: classpath:schema-h2.sql
       data-locations: classpath:data-h2.sql
+  mail:
+    host: ${ACTONE_SMTP_HOST:smtp.gmail.com}
+    port: ${ACTONE_SMTP_PORT:587}
+    username: ${ACTONE_SMTP_USERNAME:}
+    password: ${ACTONE_SMTP_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${ACTONE_SMTP_AUTH:true}
+          starttls:
+            enable: ${ACTONE_SMTP_STARTTLS:true}
+            required: ${ACTONE_SMTP_STARTTLS_REQUIRED:true}
+          # If your network blocks 587, you can switch to 465 and set ACTONE_SMTP_STARTTLS=false.
+          connectiontimeout: 15000
+          timeout: 15000
+          writetimeout: 15000
+        # Helps JavaMail trust the server cert chain on some Windows machines.
+        ssl:
+          trust: ${ACTONE_SMTP_SSL_TRUST:${ACTONE_SMTP_HOST:smtp.gmail.com}}
+
 logging:
   level:
     com.prarambh.act.one: INFO
@@ -40,6 +60,11 @@ logging:
 actone:
   admin:
     purge-password: "prarambh-admin-delhi"
+  email:
+    enabled: ${ACTONE_EMAIL_ENABLED:true}
+    subject: "Your ticket has been issued"
+    fromName: "Act-One"
+    from: ${ACTONE_EMAIL_FROM:${ACTONE_SMTP_USERNAME:}}
 
 management:
   endpoints:

@@ -14,6 +14,8 @@ CREATE TABLE tickets (
   phone_number VARCHAR(255) NOT NULL,
   status VARCHAR(32) NOT NULL,
 
+  ticket_count INT NOT NULL,
+
   created_at_date DATE NOT NULL,
   created_at_time VARCHAR(16) NOT NULL,
 
