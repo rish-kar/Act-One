@@ -11,9 +11,16 @@ spring:
   sql:
     init:
       mode: never
+  mail:
+    host: localhost
+    port: 2525
+    username: test
+    password: test
 logging:
   level:
     com.prarambh.act.one: INFO
 actone:
   admin:
     purge-password: "prarambh-admin-delhi"
+  email:
+    enabled: false

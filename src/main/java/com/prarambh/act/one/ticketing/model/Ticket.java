@@ -85,6 +85,15 @@ public class Ticket {
     @Column(nullable = false, length = 18)
     private String barcodeId;
 
+    /**
+     * Number of tickets purchased in the same purchase request.
+     *
+     * <p>When a customer buys N tickets, the system creates N ticket rows and each row stores
+     * the same {@code ticketCount=N} for traceability.
+     */
+    @Column(nullable = false)
+    private int ticketCount = 1;
+
     public UUID getTicketId() {
         return ticketId;
     }
@@ -181,6 +190,14 @@ public class Ticket {
         this.barcodeId = barcodeId;
     }
 
+    public int getTicketCount() {
+        return ticketCount;
+    }
+
+    public void setTicketCount(int ticketCount) {
+        this.ticketCount = ticketCount;
+    }
+
     /**
      * Mark the ticket as used (checked in) using IST clock.
      */
@@ -224,7 +241,11 @@ public class Ticket {
             status = TicketStatus.ISSUED;
         }
 
-        log.info("Ticket pre-persist initialized: ticketId={}, barcodeId={}, showId={}, showName='{}', status={}, createdAtDate={}, createdAtTime={} ",
-                ticketId, barcodeId, showId, showName, status, createdAtDate, createdAtTime);
+        if (ticketCount <= 0) {
+            ticketCount = 1;
+        }
+
+        log.info("Ticket pre-persist initialized: ticketId={}, barcodeId={}, showId={}, showName='{}', status={}, ticketCount={}, createdAtDate={}, createdAtTime={} ",
+                ticketId, barcodeId, showId, showName, status, ticketCount, createdAtDate, createdAtTime);
     }
 }

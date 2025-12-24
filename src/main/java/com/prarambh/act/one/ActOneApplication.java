@@ -1,12 +1,15 @@
 package com.prarambh.act.one;
 
+import com.prarambh.act.one.ticketing.service.email.EmailProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 
 /**
  * Entry point for the Act-One Spring Boot application.
  */
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = "com.prarambh.act.one")
+@EnableConfigurationProperties(EmailProperties.class)
 public class ActOneApplication {
 
 	/**

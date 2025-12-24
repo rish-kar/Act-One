@@ -4,7 +4,9 @@ import com.prarambh.act.one.ticketing.model.Ticket;
 import com.prarambh.act.one.ticketing.model.TicketStatus;
 import com.prarambh.act.one.ticketing.repository.TicketRepository;
 import com.prarambh.act.one.ticketing.service.ShowSettingsService;
+import com.prarambh.act.one.ticketing.service.TicketIssuanceService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -13,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Sort;
@@ -37,6 +40,7 @@ public class TicketController {
 
     private final TicketRepository ticketRepository;
     private final ShowSettingsService showSettingsService;
+    private final TicketIssuanceService ticketIssuanceService;
 
     /**
      * Issue a ticket.
@@ -49,8 +53,8 @@ public class TicketController {
      */
     @PostMapping("/issue")
     public ResponseEntity<?> issueTicket(@Valid @RequestBody IssueTicketRequest request) {
-        log.info("Issue ticket request received: fullName='{}', email='{}', phoneNumber='{}', showName='{}'",
-                request.fullName(), request.email(), request.phoneNumber(), request.showName());
+        log.info("Issue ticket request received: fullName='{}', email='{}', phoneNumber='{}', showName='{}', ticketCount={}",
+                request.fullName(), request.email(), request.phoneNumber(), request.showName(), request.ticketCount());
 
         String resolvedShowName = request.showName();
         if (resolvedShowName == null || resolvedShowName.isBlank()) {
@@ -69,17 +73,32 @@ public class TicketController {
         ticket.setFullName(request.fullName());
         ticket.setEmail(request.email());
         ticket.setPhoneNumber(request.phoneNumber());
+        ticket.setTicketCount(request.ticketCount() == null ? 1 : request.ticketCount());
 
-        Ticket saved = ticketRepository.save(ticket);
-        log.info("Ticket issued: ticketId={}, barcodeId={}, showId={}, showName='{}', status={} ",
-                saved.getTicketId(), saved.getBarcodeId(), saved.getShowId(), saved.getShowName(), saved.getStatus());
+        List<Ticket> savedTickets = ticketIssuanceService.issueTickets(ticket);
+        Ticket primary = savedTickets.get(0);
+
+        log.info(
+                "event=ticket_issued ticketId={} barcodeId={} showId={} showName={} status={} ticketCount={}",
+                primary.getTicketId(),
+                primary.getBarcodeId(),
+                primary.getShowId(),
+                primary.getShowName(),
+                primary.getStatus(),
+                primary.getTicketCount());
 
         return ResponseEntity.ok(Map.of(
-                "ticketId", saved.getTicketId(),
-                "status", saved.getStatus().name(),
-                "barcodeId", saved.getBarcodeId(),
-                "showId", saved.getShowId(),
-                "showName", saved.getShowName()
+                // Backwards-compatible fields (first ticket)
+                "ticketId", primary.getTicketId(),
+                "status", primary.getStatus().name(),
+                "barcodeId", primary.getBarcodeId(),
+                "showId", primary.getShowId(),
+                "showName", primary.getShowName(),
+
+                // New fields
+                "ticketCount", primary.getTicketCount(),
+                "ticketIds", savedTickets.stream().map(Ticket::getTicketId).collect(Collectors.toList()),
+                "barcodeIds", savedTickets.stream().map(Ticket::getBarcodeId).collect(Collectors.toList())
         ));
     }
 
@@ -251,7 +270,8 @@ public class TicketController {
             String showName,
             @NotBlank String fullName,
             @NotBlank String email,
-            @NotBlank String phoneNumber
+            @NotBlank String phoneNumber,
+            @Min(1) Integer ticketCount
     ) {}
 
     /**
@@ -266,6 +286,7 @@ public class TicketController {
             String email,
             String phoneNumber,
             String status,
+            Integer ticketCount,
             LocalDate createdAtDate,
             String createdAtTimeIst,
             LocalDate usedAtDate,
@@ -284,6 +305,7 @@ public class TicketController {
                     t.getEmail(),
                     t.getPhoneNumber(),
                     t.getStatus() != null ? t.getStatus().name() : null,
+                    t.getTicketCount(),
                     t.getCreatedAtDate(),
                     formatIstTime(t.getCreatedAtTime()),
                     t.getUsedAtDate(),
