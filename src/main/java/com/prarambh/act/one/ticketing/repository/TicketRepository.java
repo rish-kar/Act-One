@@ -1,6 +1,7 @@
 package com.prarambh.act.one.ticketing.repository;
 
 import com.prarambh.act.one.ticketing.model.Ticket;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -30,4 +31,10 @@ public interface TicketRepository extends JpaRepository<Ticket, UUID> {
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("update Ticket t set t.showName = :showName, t.showId = :showId")
     int updateShowNameAndShowIdForAll(String showName, String showId);
+
+    /** Count remaining ISSUED tickets for a best-effort purchase grouping. */
+    long countByEmailIgnoreCaseAndPhoneNumberIgnoreCaseAndShowIdAndStatus(String email, String phoneNumber, String showId, com.prarambh.act.one.ticketing.model.TicketStatus status);
+
+    /** Fetch all tickets for a best-effort purchase grouping. */
+    List<Ticket> findByEmailIgnoreCaseAndPhoneNumberIgnoreCaseAndShowId(String email, String phoneNumber, String showId);
 }
