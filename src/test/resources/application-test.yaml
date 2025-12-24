@@ -24,3 +24,6 @@ actone:
     purge-password: "prarambh-admin-delhi"
   email:
     enabled: false
+  ticket-card:
+    enabled: true
+    templateResource: "classpath:/static/Card.jpeg"
