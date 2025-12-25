@@ -2,6 +2,8 @@ package com.prarambh.act.one.ticketing;
 
 import com.prarambh.act.one.ActOneApplication;
 import com.prarambh.act.one.ticketing.model.Ticket;
+import com.prarambh.act.one.ticketing.model.TicketStatus;
+import com.prarambh.act.one.ticketing.service.ManualTransactionService;
 import com.prarambh.act.one.ticketing.service.TicketIssuanceService;
 import com.prarambh.act.one.ticketing.service.email.EmailSender;
 import com.prarambh.act.one.ticketing.repository.TicketRepository;
@@ -78,6 +80,9 @@ class TicketIssuedEmailListenerTest {
     TicketIssuanceService ticketIssuanceService;
 
     @Autowired
+    ManualTransactionService manualTransactionService;
+
+    @Autowired
     TicketCheckInService ticketCheckInService;
 
     @Autowired
@@ -100,7 +105,13 @@ class TicketIssuedEmailListenerTest {
         t.setEmail("test@example.com");
         t.setPhoneNumber("+10000000000");
 
-        ticketIssuanceService.issueTicket(t);
+        // issueTicket now creates ticket with TRANSACTION_MADE status - no email sent yet
+        List<Ticket> tickets = ticketIssuanceService.issueTickets(t);
+        org.junit.jupiter.api.Assertions.assertEquals(0, emailSender.deliveryCount());
+
+        // After manual validation -> ISSUED, email is sent
+        int customerId = tickets.get(0).getCustomerId();
+        manualTransactionService.validateTransactionAndIssueTickets(customerId);
 
         org.junit.jupiter.api.Assertions.assertTrue(emailSender.awaitDeliveryCount(1, 2000));
         org.junit.jupiter.api.Assertions.assertEquals(1, emailSender.deliveryCount());
@@ -116,7 +127,13 @@ class TicketIssuedEmailListenerTest {
         t.setPhoneNumber("+10000000000");
         t.setTicketCount(3);
 
-        ticketIssuanceService.issueTickets(t);
+        // issueTickets now creates tickets with TRANSACTION_MADE status - no email sent yet
+        List<Ticket> tickets = ticketIssuanceService.issueTickets(t);
+        org.junit.jupiter.api.Assertions.assertEquals(0, emailSender.deliveryCount());
+
+        // After manual validation -> ISSUED, one email is sent for the purchase
+        int customerId = tickets.get(0).getCustomerId();
+        manualTransactionService.validateTransactionAndIssueTickets(customerId);
 
         org.junit.jupiter.api.Assertions.assertTrue(emailSender.awaitDeliveryCount(1, 2000));
         org.junit.jupiter.api.Assertions.assertEquals(1, emailSender.deliveryCount());
@@ -132,8 +149,13 @@ class TicketIssuedEmailListenerTest {
         t.setPhoneNumber("+10000000000");
         t.setTicketCount(3);
 
-        ticketIssuanceService.issueTickets(t);
+        List<Ticket> tickets = ticketIssuanceService.issueTickets(t);
 
+        // Validate the transaction
+        int customerId = tickets.get(0).getCustomerId();
+        manualTransactionService.validateTransactionAndIssueTickets(customerId);
+
+        // Email should NOT be sent because email is missing
         org.junit.jupiter.api.Assertions.assertFalse(emailSender.awaitDeliveryCount(1, 400));
         org.junit.jupiter.api.Assertions.assertEquals(0, emailSender.deliveryCount());
     }
@@ -147,7 +169,11 @@ class TicketIssuedEmailListenerTest {
         t.setPhoneNumber("+10000000000");
         t.setTicketCount(3);
 
-        List<Ticket> issued = ticketIssuanceService.issueTickets(t);
+        List<Ticket> tickets = ticketIssuanceService.issueTickets(t);
+
+        // Validate the transaction to move to ISSUED
+        int customerId = tickets.get(0).getCustomerId();
+        List<Ticket> issued = manualTransactionService.validateTransactionAndIssueTickets(customerId);
         org.junit.jupiter.api.Assertions.assertTrue(emailSender.awaitDeliveryCount(1, 2000));
         org.junit.jupiter.api.Assertions.assertEquals(1, emailSender.deliveryCount());
 
@@ -174,7 +200,7 @@ class TicketIssuedEmailListenerTest {
 
         // Sanity: no ISSUED tickets remain for group
         long remaining = ticketRepository.countByEmailIgnoreCaseAndPhoneNumberIgnoreCaseAndShowIdAndStatus(
-                t.getEmail(), t.getPhoneNumber(), issued.get(0).getShowId(), com.prarambh.act.one.ticketing.model.TicketStatus.ISSUED);
+                t.getEmail(), t.getPhoneNumber(), issued.get(0).getShowId(), TicketStatus.ISSUED);
         org.junit.jupiter.api.Assertions.assertEquals(0, remaining);
     }
 }

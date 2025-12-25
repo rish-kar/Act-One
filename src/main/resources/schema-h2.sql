@@ -12,9 +12,14 @@ CREATE TABLE tickets (
   full_name VARCHAR(255) NOT NULL,
   email VARCHAR(255),
   phone_number VARCHAR(255) NOT NULL,
+
+  customer_id INT,
+  transaction_id VARCHAR(255),
+
   status VARCHAR(32) NOT NULL,
 
   ticket_count INT NOT NULL,
+  ticket_amount DECIMAL(10, 2) NOT NULL,
 
   created_at_date DATE NOT NULL,
   created_at_time VARCHAR(16) NOT NULL,

@@ -40,10 +40,13 @@ class TicketControllerIntegrationTest {
         assertThat(body).isNotNull();
         assertThat(body.get("ticketId")).isNotNull();
         assertThat(body.get("barcodeId")).isNotNull();
-        assertThat(body.get("status")).isEqualTo("ISSUED");
+        assertThat(body.get("status")).isEqualTo("TRANSACTION_MADE");
         assertThat(body.get("showId")).isNotNull();
         assertThat(body.get("showName")).isEqualTo("Test Show");
         assertThat(body.get("showId").toString()).contains("SHOW-");
+        assertThat(body.get("customerId")).isNotNull();
+        assertThat(body.get("transactionId")).isNotNull();
+        assertThat(body.get("message")).isEqualTo("Transaction recorded. Tickets will be issued after manual approval.");
 
         assertThat(body.get("ticketCount")).isEqualTo(1);
         assertThat((java.util.List<?>) body.get("ticketIds")).hasSize(1);
@@ -118,6 +121,17 @@ class TicketControllerIntegrationTest {
 
         assertThat(issueBody).isNotNull();
         String barcodeId = issueBody.get("barcodeId").toString();
+        int customerId = ((Number) issueBody.get("customerId")).intValue();
+
+        // First, validate the transaction to move tickets to ISSUED status
+        webTestClient.post()
+                .uri("/api/transactions/{customerId}/validate", customerId)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(Map.class)
+                .value(body -> {
+                    assertThat(body.get("newStatus")).isEqualTo("ISSUED");
+                });
 
         Map first = webTestClient.post()
                 .uri("/api/tickets/barcode/{barcodeId}/checkin", barcodeId)

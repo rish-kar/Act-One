@@ -1,6 +1,7 @@
 package com.prarambh.act.one.ticketing.repository;
 
 import com.prarambh.act.one.ticketing.model.Ticket;
+import com.prarambh.act.one.ticketing.model.TicketStatus;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -44,4 +45,25 @@ public interface TicketRepository extends JpaRepository<Ticket, UUID> {
     /** Find tickets whose ticketId UUID string ends with the given suffix (case-insensitive). */
     @Query("select t from Ticket t where lower(cast(t.ticketId as string)) like concat('%', lower(:suffix))")
     List<Ticket> findByTicketIdSuffix(String suffix);
+
+    /** True if any ticket row exists for the given customerId. */
+    boolean existsByCustomerId(Integer customerId);
+
+    /** Find tickets by customerId and status. */
+    List<Ticket> findByCustomerIdAndStatus(Integer customerId, TicketStatus status);
+
+    /** Find all tickets by customerId. */
+    List<Ticket> findByCustomerId(Integer customerId);
+
+    /**
+     * Returns distinct customerIds that have at least one ticket row with the given status.
+     */
+    @Query("select distinct t.customerId from Ticket t where t.customerId is not null and t.status = :status")
+    List<Integer> findDistinctCustomerIdsByStatus(TicketStatus status);
+
+    /** Latest ticket for a customer in TRANSACTION_MADE status */
+    Ticket findFirstByCustomerIdAndStatusOrderByCreatedAtDateDescCreatedAtTimeDesc(Integer customerId, TicketStatus status);
+
+    /** Find first ticket by transactionId */
+    Optional<Ticket> findFirstByTransactionId(String transactionId);
 }

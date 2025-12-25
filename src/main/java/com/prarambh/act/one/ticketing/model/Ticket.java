@@ -9,6 +9,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
@@ -93,6 +94,26 @@ public class Ticket {
      */
     @Column(nullable = false)
     private int ticketCount = 1;
+
+    /**
+     * 4-digit customer identifier (1000-9999). Not unique across rows.
+     *
+     * <p>Same customer can have multiple rows (multiple tickets / multiple purchases), so this value
+     * can repeat across tickets.
+     */
+    @Column(nullable = true)
+    private Integer customerId;
+
+    /**
+     * Transaction identifier provided by the buyer (e.g., UPI transaction ID).
+     *
+     * <p>Used for manual validation before tickets are issued.
+     */
+    @Column(nullable = true)
+    private String transactionId;
+
+    @Column(name = "ticket_amount", nullable = false, precision = 10, scale = 2)
+    private BigDecimal ticketAmount;
 
     public UUID getTicketId() {
         return ticketId;
@@ -215,6 +236,30 @@ public class Ticket {
         this.ticketCount = ticketCount;
     }
 
+    public Integer getCustomerId() {
+        return customerId;
+    }
+
+    public void setCustomerId(Integer customerId) {
+        this.customerId = customerId;
+    }
+
+    public String getTransactionId() {
+        return transactionId;
+    }
+
+    public void setTransactionId(String transactionId) {
+        this.transactionId = transactionId;
+    }
+
+    public BigDecimal getTicketAmount() {
+        return ticketAmount;
+    }
+
+    public void setTicketAmount(BigDecimal ticketAmount) {
+        this.ticketAmount = ticketAmount;
+    }
+
     /**
      * Mark the ticket as used (checked in) using IST clock.
      */
@@ -258,6 +303,8 @@ public class Ticket {
         }
 
         if (status == null) {
+            // Default is ISSUED for legacy issuance flow, but transaction-first endpoints will
+            // explicitly set TRANSACTION_MADE.
             status = TicketStatus.ISSUED;
         }
 
