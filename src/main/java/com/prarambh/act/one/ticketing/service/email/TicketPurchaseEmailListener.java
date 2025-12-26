@@ -95,7 +95,7 @@ public class TicketPurchaseEmailListener {
             return;
         }
 
-        String subject = "Checked-in confirmed — enjoy the show";
+        String subject = "Checked-in confirmed - enjoy the show";
         log.info("event=purchase_checkin_email_attempt to={} ticketCount={} firstTicketId={}", to, tickets.size(), first.getTicketId());
         emailSender.send(to, subject, buildCheckedInBody(tickets));
     }
@@ -130,7 +130,7 @@ public class TicketPurchaseEmailListener {
             sb.append(quote.formatted()).append("\n\n");
         }
 
-        sb.append("We can’t wait to host you — enjoy the show!\n\n")
+        sb.append("We can't wait to host you - enjoy the show!\n\n")
                 .append("Thanks,\n")
                 .append("Prarambh Theatre Group")
                 .append("\n");
@@ -169,7 +169,7 @@ public class TicketPurchaseEmailListener {
             sb.append(quote.formatted()).append("\n\n");
         }
 
-        sb.append("Have a wonderful time — enjoy the show!\n\n")
+        sb.append("Have a wonderful time - enjoy the show!\n\n")
                 .append("Warmly,\n")
                 .append("Prarambh Theatre Group")
                 .append("\n");

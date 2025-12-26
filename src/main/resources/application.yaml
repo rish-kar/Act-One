@@ -40,10 +40,17 @@ spring:
           starttls:
             enable: ${ACTONE_SMTP_STARTTLS:true}
             required: ${ACTONE_SMTP_STARTTLS_REQUIRED:true}
-          # If your network blocks 587, you can switch to 465 and set ACTONE_SMTP_STARTTLS=false.
+          allowutf8: true
           connectiontimeout: 150000
           timeout: 150000
           writetimeout: 150000
+        mime:
+          charset: UTF-8
+        transport:
+          protocol: smtp
+        # Prefer quoted-printable for best compatibility with punctuation in plain/HTML
+        mime.encodefilename: true
+        smtp.sendpartial: true
         # Helps JavaMail trust the server cert chain on some Windows machines.
         ssl:
           trust: ${ACTONE_SMTP_SSL_TRUST:${ACTONE_SMTP_HOST:smtp.gmail.com}}

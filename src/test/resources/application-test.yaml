@@ -16,6 +16,12 @@ spring:
     port: 2525
     username: test
     password: test
+    properties:
+      mail:
+        smtp:
+          allowutf8: true
+        mime:
+          charset: UTF-8
 logging:
   level:
     com.prarambh.act.one: INFO

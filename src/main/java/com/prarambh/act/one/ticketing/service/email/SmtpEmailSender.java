@@ -73,7 +73,6 @@ public class SmtpEmailSender implements EmailSender {
         String bcc = (configuredBcc != null && !configuredBcc.isBlank()) ? configuredBcc.trim() : null;
 
         try {
-            // Use MIME message with explicit UTF-8 so em-dash/curly quotes survive.
             var mime = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mime, false, StandardCharsets.UTF_8.name());
 
@@ -84,8 +83,15 @@ public class SmtpEmailSender implements EmailSender {
             if (bcc != null) {
                 helper.setBcc(bcc);
             }
-            helper.setSubject(subject);
-            helper.setText(body, false);
+            String safeSubject = normalizeToAscii(subject == null ? "" : subject);
+            helper.setSubject(safeSubject);
+            mime.setSubject(safeSubject, StandardCharsets.UTF_8.name());
+
+            String safeBody = normalizeToAscii(body == null ? "" : body);
+            mime.setText(safeBody, StandardCharsets.UTF_8.name());
+
+            // Force UTF-8 content type for plain text.
+            mime.setHeader("Content-Type", "text/plain; charset=UTF-8");
 
             mailSender.send(mime);
             log.info(
@@ -162,7 +168,6 @@ public class SmtpEmailSender implements EmailSender {
 
         try {
             var mime = mailSender.createMimeMessage();
-            // true => multipart
             MimeMessageHelper helper = new MimeMessageHelper(mime, true, StandardCharsets.UTF_8.name());
 
             if (effectiveFrom != null && !effectiveFrom.isBlank()) {
@@ -172,8 +177,12 @@ public class SmtpEmailSender implements EmailSender {
             if (bcc != null) {
                 helper.setBcc(bcc);
             }
-            helper.setSubject(subject);
-            helper.setText(body, false);
+            String safeSubject = normalizeToAscii(subject == null ? "" : subject);
+            helper.setSubject(safeSubject);
+            mime.setSubject(safeSubject, StandardCharsets.UTF_8.name());
+
+            String safeBody = normalizeToAscii(body == null ? "" : body);
+            helper.setText(safeBody, false);
 
             int attachedCount = 0;
             for (EmailAttachment att : attachments) {
@@ -244,5 +253,30 @@ public class SmtpEmailSender implements EmailSender {
             return "***";
         }
         return email.charAt(0) + "***" + email.substring(at);
+    }
+
+    private static String normalizeToAscii(String s) {
+        if (s == null || s.isEmpty()) {
+            return s;
+        }
+
+        // Replace characters that commonly become '?' when a hop downgrades encoding.
+        return s
+                // smart single quotes/apostrophes
+                .replace('\u2018', '\'')
+                .replace('\u2019', '\'')
+                .replace('\u201B', '\'')
+                // smart double quotes
+                .replace('\u201C', '"')
+                .replace('\u201D', '"')
+                .replace('\u201E', '"')
+                // dashes
+                .replace('\u2013', '-')
+                .replace('\u2014', '-')
+                .replace('\u2212', '-')
+                // ellipsis
+                .replace("\u2026", "...")
+                // non-breaking space
+                .replace('\u00A0', ' ');
     }
 }
