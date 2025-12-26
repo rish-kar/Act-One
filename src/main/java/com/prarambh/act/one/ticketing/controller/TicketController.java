@@ -74,34 +74,38 @@ public class TicketController {
         ticket.setShowName(resolvedShowName);
         ticket.setFullName(request.fullName());
         ticket.setEmail(request.email());
-        ticket.setPhoneNumber(request.phoneNumber());
+        ticket.setPhoneNumber(normalizePhoneLast10(request.phoneNumber()));
         ticket.setTicketCount(request.ticketCount() == null ? 1 : request.ticketCount());
+        ticket.setTransactionId(request.transactionId());
+        ticket.setTicketAmount(request.ticketAmount());
 
         List<Ticket> savedTickets = ticketIssuanceService.issueTickets(ticket);
         Ticket primary = savedTickets.get(0);
 
         log.info(
-                "event=ticket_issued ticketId={} barcodeId={} showId={} showName={} status={} ticketCount={}",
+                "event=ticket_recorded ticketId={} barcodeId={} showId={} showName={} status={} ticketCount={} customerId={}",
                 primary.getTicketId(),
                 primary.getBarcodeId(),
                 primary.getShowId(),
                 primary.getShowName(),
                 primary.getStatus(),
-                primary.getTicketCount());
+                primary.getTicketCount(),
+                primary.getCustomerId());
 
-        return ResponseEntity.ok(Map.of(
-                // Backwards-compatible fields (first ticket)
-                "ticketId", primary.getTicketId(),
-                "status", primary.getStatus().name(),
-                "barcodeId", primary.getBarcodeId(),
-                "showId", primary.getShowId(),
-                "showName", primary.getShowName(),
+        Map<String, Object> response = new java.util.LinkedHashMap<>();
+        response.put("ticketId", primary.getTicketId());
+        response.put("status", primary.getStatus().name());
+        response.put("barcodeId", primary.getBarcodeId());
+        response.put("showId", primary.getShowId());
+        response.put("showName", primary.getShowName());
+        response.put("ticketCount", primary.getTicketCount());
+        response.put("customerId", primary.getCustomerId());
+        response.put("transactionId", primary.getTransactionId());
+        response.put("ticketIds", savedTickets.stream().map(Ticket::getTicketId).collect(Collectors.toList()));
+        response.put("barcodeIds", savedTickets.stream().map(Ticket::getBarcodeId).collect(Collectors.toList()));
+        response.put("message", "Transaction recorded. Tickets will be issued after manual approval.");
 
-                // New fields
-                "ticketCount", primary.getTicketCount(),
-                "ticketIds", savedTickets.stream().map(Ticket::getTicketId).collect(Collectors.toList()),
-                "barcodeIds", savedTickets.stream().map(Ticket::getBarcodeId).collect(Collectors.toList())
-        ));
+        return ResponseEntity.ok(response);
     }
 
     /**
@@ -131,6 +135,16 @@ public class TicketController {
                     "message", "Ticket has already been checked in",
                     "usedAtDate", ticket.getUsedAtDate(),
                     "usedAtTimeIst", TicketResponse.formatIstTime(ticket.getUsedAtTime())
+            ));
+        }
+
+        if (ticket.getStatus() == TicketStatus.TRANSACTION_MADE) {
+            log.warn("Check-in PENDING_APPROVAL: barcodeId={}, ticketId={}, customerId={}",
+                    barcodeId, ticket.getTicketId(), ticket.getCustomerId());
+            return ResponseEntity.ok(Map.of(
+                    "result", "PENDING_APPROVAL",
+                    "message", "Ticket not yet approved. Please contact admin.",
+                    "customerId", ticket.getCustomerId() != null ? ticket.getCustomerId() : 0
             ));
         }
 
@@ -208,6 +222,15 @@ public class TicketController {
             ));
         }
 
+        if (ticket.getStatus() == TicketStatus.TRANSACTION_MADE) {
+            log.warn("Check-in PENDING_APPROVAL: ticketId={}, customerId={}", ticketId, ticket.getCustomerId());
+            return ResponseEntity.ok(Map.of(
+                    "result", "PENDING_APPROVAL",
+                    "message", "Ticket not yet approved. Please contact admin.",
+                    "customerId", ticket.getCustomerId() != null ? ticket.getCustomerId() : 0
+            ));
+        }
+
         ticket.markUsed();
         ticketRepository.save(ticket);
         log.info("Check-in VALID: ticketId={}, set status=USED usedAtDate={} usedAtTimeIst={}",
@@ -274,7 +297,9 @@ public class TicketController {
             @NotBlank String fullName,
             @NotBlank String email,
             @NotBlank String phoneNumber,
-            @Min(1) Integer ticketCount
+            @Min(1) Integer ticketCount,
+            @NotBlank String transactionId,
+            @jakarta.validation.constraints.NotNull java.math.BigDecimal ticketAmount
     ) {}
 
     /**
@@ -288,9 +313,11 @@ public class TicketController {
             String fullName,
             String email,
             String phoneNumber,
+            Integer customerId,
+            String transactionId,
             String status,
             Integer ticketCount,
-            LocalDate createdAtDate,
+            String id, LocalDate createdAtDate,
             String createdAtTimeIst,
             LocalDate usedAtDate,
             String usedAtTimeIst
@@ -307,8 +334,11 @@ public class TicketController {
                     t.getFullName(),
                     t.getEmail(),
                     t.getPhoneNumber(),
+                    t.getCustomerId(),
+                    t.getTransactionId(),
                     t.getStatus() != null ? t.getStatus().name() : null,
                     t.getTicketCount(),
+                    t.getTransactionId(),
                     t.getCreatedAtDate(),
                     formatIstTime(t.getCreatedAtTime()),
                     t.getUsedAtDate(),
@@ -322,5 +352,16 @@ public class TicketController {
         static String formatIstTime(LocalTime time) {
             return time == null ? null : time.format(IST_12H_TIME);
         }
+    }
+
+    private static String normalizePhoneLast10(String input) {
+        if (input == null) {
+            return null;
+        }
+        String digits = input.replaceAll("\\D", "");
+        if (digits.length() <= 10) {
+            return digits;
+        }
+        return digits.substring(digits.length() - 10);
     }
 }

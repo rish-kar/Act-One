@@ -2,6 +2,8 @@ package com.prarambh.act.one.ticketing;
 
 import com.prarambh.act.one.ActOneApplication;
 import com.prarambh.act.one.ticketing.model.Ticket;
+import com.prarambh.act.one.ticketing.model.TicketStatus;
+import com.prarambh.act.one.ticketing.service.ManualTransactionService;
 import com.prarambh.act.one.ticketing.service.TicketIssuanceService;
 import com.prarambh.act.one.ticketing.service.email.EmailSender;
 import com.prarambh.act.one.ticketing.repository.TicketRepository;
@@ -78,6 +80,9 @@ class TicketIssuedEmailListenerTest {
     TicketIssuanceService ticketIssuanceService;
 
     @Autowired
+    ManualTransactionService manualTransactionService;
+
+    @Autowired
     TicketCheckInService ticketCheckInService;
 
     @Autowired
@@ -98,9 +103,17 @@ class TicketIssuedEmailListenerTest {
         t.setShowName("Test Show");
         t.setFullName("Test User");
         t.setEmail("test@example.com");
-        t.setPhoneNumber("+10000000000");
+        t.setPhoneNumber("1000000000");
+        t.setTransactionId("DEMO-TXN-1");
+        t.setTicketAmount(new java.math.BigDecimal("750.00"));
 
-        ticketIssuanceService.issueTicket(t);
+        // issueTicket now creates ticket with TRANSACTION_MADE status - no email sent yet
+        List<Ticket> tickets = ticketIssuanceService.issueTickets(t);
+        org.junit.jupiter.api.Assertions.assertEquals(0, emailSender.deliveryCount());
+
+        // After manual validation -> ISSUED, email is sent
+        int customerId = tickets.get(0).getCustomerId();
+        manualTransactionService.validateTransactionAndIssueTickets(customerId);
 
         org.junit.jupiter.api.Assertions.assertTrue(emailSender.awaitDeliveryCount(1, 2000));
         org.junit.jupiter.api.Assertions.assertEquals(1, emailSender.deliveryCount());
@@ -113,10 +126,18 @@ class TicketIssuedEmailListenerTest {
         t.setShowName("Test Show");
         t.setFullName("Test User");
         t.setEmail("test@example.com");
-        t.setPhoneNumber("+10000000000");
+        t.setPhoneNumber("1000000000");
         t.setTicketCount(3);
+        t.setTransactionId("DEMO-TXN-2");
+        t.setTicketAmount(new java.math.BigDecimal("750.00"));
 
-        ticketIssuanceService.issueTickets(t);
+        // issueTickets now creates tickets with TRANSACTION_MADE status - no email sent yet
+        List<Ticket> tickets = ticketIssuanceService.issueTickets(t);
+        org.junit.jupiter.api.Assertions.assertEquals(0, emailSender.deliveryCount());
+
+        // After manual validation -> ISSUED, one email is sent for the purchase
+        int customerId = tickets.get(0).getCustomerId();
+        manualTransactionService.validateTransactionAndIssueTickets(customerId);
 
         org.junit.jupiter.api.Assertions.assertTrue(emailSender.awaitDeliveryCount(1, 2000));
         org.junit.jupiter.api.Assertions.assertEquals(1, emailSender.deliveryCount());
@@ -129,13 +150,47 @@ class TicketIssuedEmailListenerTest {
         t.setShowName("Test Show");
         t.setFullName("Test User");
         t.setEmail(null);
-        t.setPhoneNumber("+10000000000");
+        t.setPhoneNumber("1000000000");
         t.setTicketCount(3);
+        t.setTransactionId("DEMO-TXN-3");
+        t.setTicketAmount(new java.math.BigDecimal("750.00"));
 
-        ticketIssuanceService.issueTickets(t);
+        List<Ticket> tickets = ticketIssuanceService.issueTickets(t);
 
+        // Validate the transaction
+        int customerId = tickets.get(0).getCustomerId();
+        manualTransactionService.validateTransactionAndIssueTickets(customerId);
+
+        // Email should NOT be sent because email is missing
         org.junit.jupiter.api.Assertions.assertFalse(emailSender.awaitDeliveryCount(1, 400));
         org.junit.jupiter.api.Assertions.assertEquals(0, emailSender.deliveryCount());
+    }
+
+    private static String extractQuoteLine(String body) {
+        if (body == null) {
+            return null;
+        }
+
+        String[] markers = {"Quote of the day:", "Quote of the moment:"};
+        for (String marker : markers) {
+            int idx = body.indexOf(marker);
+            if (idx < 0) {
+                continue;
+            }
+
+            String after = body.substring(idx + marker.length());
+            // Split into lines and return the first non-empty line.
+            String[] lines = after.split("\\r?\\n");
+            for (String line : lines) {
+                String trimmed = line == null ? "" : line.trim();
+                if (!trimmed.isBlank()) {
+                    return trimmed;
+                }
+            }
+            return null;
+        }
+
+        return null;
     }
 
     @Test
@@ -144,12 +199,22 @@ class TicketIssuedEmailListenerTest {
         t.setShowName("Test Show");
         t.setFullName("Test User");
         t.setEmail("test@example.com");
-        t.setPhoneNumber("+10000000000");
+        t.setPhoneNumber("1000000000");
         t.setTicketCount(3);
+        t.setTransactionId("DEMO-TXN-4");
+        t.setTicketAmount(new java.math.BigDecimal("750.00"));
 
-        List<Ticket> issued = ticketIssuanceService.issueTickets(t);
+        List<Ticket> tickets = ticketIssuanceService.issueTickets(t);
+
+        // Validate the transaction to move to ISSUED
+        int customerId = tickets.get(0).getCustomerId();
+        List<Ticket> issued = manualTransactionService.validateTransactionAndIssueTickets(customerId);
         org.junit.jupiter.api.Assertions.assertTrue(emailSender.awaitDeliveryCount(1, 2000));
         org.junit.jupiter.api.Assertions.assertEquals(1, emailSender.deliveryCount());
+
+        String issueBody = emailSender.lastBody();
+        org.assertj.core.api.Assertions.assertThat(issueBody).contains("Ticket details:");
+        org.assertj.core.api.Assertions.assertThat(issueBody).contains("Quote of the day:");
 
         // Reset so we only count check-in emails
         emailSender.reset();
@@ -168,13 +233,16 @@ class TicketIssuedEmailListenerTest {
 
         String body = emailSender.lastBody();
         org.assertj.core.api.Assertions.assertThat(body).contains("Your check-in is confirmed");
+        org.assertj.core.api.Assertions.assertThat(body).contains("Quote of the moment:");
         for (Ticket it : issued) {
             org.assertj.core.api.Assertions.assertThat(body).contains(it.getBarcodeId());
         }
 
+        // Quote text is optional; we only assert the section header exists.
+
         // Sanity: no ISSUED tickets remain for group
         long remaining = ticketRepository.countByEmailIgnoreCaseAndPhoneNumberIgnoreCaseAndShowIdAndStatus(
-                t.getEmail(), t.getPhoneNumber(), issued.get(0).getShowId(), com.prarambh.act.one.ticketing.model.TicketStatus.ISSUED);
+                t.getEmail(), t.getPhoneNumber(), issued.get(0).getShowId(), TicketStatus.ISSUED);
         org.junit.jupiter.api.Assertions.assertEquals(0, remaining);
     }
 }

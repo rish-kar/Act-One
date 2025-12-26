@@ -1,9 +1,12 @@
 package com.prarambh.act.one.ticketing.service.email;
 
 import com.prarambh.act.one.ticketing.model.Ticket;
+import com.prarambh.act.one.ticketing.model.EmailQuoteType;
 import com.prarambh.act.one.ticketing.service.TicketPurchaseCheckedInEvent;
 import com.prarambh.act.one.ticketing.service.TicketPurchaseIssuedEvent;
 import com.prarambh.act.one.ticketing.service.card.TicketCardGenerator;
+import com.prarambh.act.one.ticketing.service.quotes.QuoteSelectionService;
+import com.prarambh.act.one.ticketing.service.quotes.TheatreQuote;
 import java.nio.file.Path;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -26,6 +29,7 @@ public class TicketPurchaseEmailListener {
     private final EmailSender emailSender;
     private final EmailProperties emailProperties;
     private final TicketCardGenerator ticketCardGenerator;
+    private final QuoteSelectionService quoteSelectionService;
 
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -91,14 +95,15 @@ public class TicketPurchaseEmailListener {
             return;
         }
 
-        String subject = "Checked-in confirmed — enjoy the show";
+        String subject = "Checked-in confirmed - enjoy the show";
         log.info("event=purchase_checkin_email_attempt to={} ticketCount={} firstTicketId={}", to, tickets.size(), first.getTicketId());
         emailSender.send(to, subject, buildCheckedInBody(tickets));
     }
 
     private String buildIssuedBody(List<Ticket> tickets) {
         Ticket first = tickets.get(0);
-        String fromName = effectiveFromName();
+
+        TheatreQuote quote = quoteSelectionService.quoteForCustomer(first.getCustomerId(), EmailQuoteType.ISSUE);
 
         StringBuilder sb = new StringBuilder();
         sb.append("Hello ").append(nullToEmpty(first.getFullName())).append(",\n\n")
@@ -120,9 +125,12 @@ public class TicketPurchaseEmailListener {
                     .append("\n");
         }
 
-        sb.append("\nQuote of the day:\n")
-                .append("\"The stage is not merely the meeting place of all the arts, but is also the return of art to life.\" — Oscar Wilde\n\n")
-                .append("We can’t wait to host you — enjoy the show!\n\n")
+        sb.append("\nQuote of the day:\n");
+        if (quote != null && quote.text() != null && !quote.text().isBlank()) {
+            sb.append(quote.formatted()).append("\n\n");
+        }
+
+        sb.append("We can't wait to host you - enjoy the show!\n\n")
                 .append("Thanks,\n")
                 .append("Prarambh Theatre Group")
                 .append("\n");
@@ -132,7 +140,8 @@ public class TicketPurchaseEmailListener {
 
     private String buildCheckedInBody(List<Ticket> tickets) {
         Ticket first = tickets.get(0);
-        String fromName = effectiveFromName();
+
+        TheatreQuote quote = quoteSelectionService.quoteForCustomer(first.getCustomerId(), EmailQuoteType.CHECK_IN);
 
         String usedAtDate = first.getUsedAtDate() != null ? first.getUsedAtDate().toString() : "";
         String usedAtTime = first.getUsedAtTime() != null ? first.getUsedAtTime().format(IST_12H_TIME) : "";
@@ -155,20 +164,17 @@ public class TicketPurchaseEmailListener {
                     .append("\n");
         }
 
-        sb.append("\nQuote of the moment:\n")
-                .append("\"The mission of the theatre, after all, is to change, to raise the consciousness of people to their human possibilities.\" – Arthur Miller\n\n")
-                .append("Have a wonderful time — enjoy the show!\n\n")
+        sb.append("\nQuote of the moment:\n");
+        if (quote != null && quote.text() != null && !quote.text().isBlank()) {
+            sb.append(quote.formatted()).append("\n\n");
+        }
+
+        sb.append("Have a wonderful time - enjoy the show!\n\n")
                 .append("Warmly,\n")
                 .append("Prarambh Theatre Group")
                 .append("\n");
 
         return sb.toString();
-    }
-
-    private String effectiveFromName() {
-        return (emailProperties.fromName() == null || emailProperties.fromName().isBlank())
-                ? "Act-One"
-                : emailProperties.fromName();
     }
 
     private static String nullToEmpty(String s) {

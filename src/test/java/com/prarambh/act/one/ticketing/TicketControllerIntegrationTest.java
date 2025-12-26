@@ -21,8 +21,9 @@ class TicketControllerIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        String baseUrl = System.getenv().getOrDefault("ACTONE_API_BASE", "http://localhost:" + port);
         this.webTestClient = WebTestClient.bindToServer()
-                .baseUrl("http://localhost:" + port)
+                .baseUrl(baseUrl)
                 .build();
     }
 
@@ -40,10 +41,13 @@ class TicketControllerIntegrationTest {
         assertThat(body).isNotNull();
         assertThat(body.get("ticketId")).isNotNull();
         assertThat(body.get("barcodeId")).isNotNull();
-        assertThat(body.get("status")).isEqualTo("ISSUED");
+        assertThat(body.get("status")).isEqualTo("TRANSACTION_MADE");
         assertThat(body.get("showId")).isNotNull();
         assertThat(body.get("showName")).isEqualTo("Test Show");
         assertThat(body.get("showId").toString()).contains("SHOW-");
+        assertThat(body.get("customerId")).isNotNull();
+        assertThat(body.get("transactionId")).isNotNull();
+        assertThat(body.get("message")).isEqualTo("Transaction recorded. Tickets will be issued after manual approval.");
 
         assertThat(body.get("ticketCount")).isEqualTo(1);
         assertThat((java.util.List<?>) body.get("ticketIds")).hasSize(1);
@@ -59,7 +63,9 @@ class TicketControllerIntegrationTest {
                         "fullName", "Test User",
                         "email", "test@example.com",
                         "phoneNumber", "+10000000000",
-                        "ticketCount", 3
+                        "ticketCount", 3,
+                        "transactionId", "DEMO-TXN",
+                        "ticketAmount", "750.00"
                 ))
                 .exchange()
                 .expectStatus().isOk()
@@ -118,6 +124,17 @@ class TicketControllerIntegrationTest {
 
         assertThat(issueBody).isNotNull();
         String barcodeId = issueBody.get("barcodeId").toString();
+        int customerId = ((Number) issueBody.get("customerId")).intValue();
+
+        // First, validate the transaction to move tickets to ISSUED status
+        webTestClient.post()
+                .uri("/api/transactions/{customerId}/validate", customerId)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(Map.class)
+                .value(body -> {
+                    assertThat(body.get("ticketStatus")).isEqualTo("ISSUED");
+                });
 
         Map first = webTestClient.post()
                 .uri("/api/tickets/barcode/{barcodeId}/checkin", barcodeId)
@@ -224,7 +241,9 @@ class TicketControllerIntegrationTest {
                 .bodyValue(Map.of(
                         "fullName", "Test User",
                         "email", "test@example.com",
-                        "phoneNumber", "+10000000000"
+                        "phoneNumber", "+10000000000",
+                        "transactionId", "DEMO-TXN",
+                        "ticketAmount", "750.00"
                 ))
                 .exchange()
                 .expectStatus().isBadRequest()
@@ -287,7 +306,9 @@ class TicketControllerIntegrationTest {
                 .bodyValue(Map.of(
                         "fullName", "Test User",
                         "email", "test@example.com",
-                        "phoneNumber", "+10000000000"
+                        "phoneNumber", "+10000000000",
+                        "transactionId", "DEMO-TXN",
+                        "ticketAmount", "750.00"
                 ))
                 .exchange()
                 .expectStatus().isOk()
@@ -314,10 +335,49 @@ class TicketControllerIntegrationTest {
                 .bodyValue(Map.of(
                         "fullName", "Test User",
                         "email", "test@example.com",
-                        "phoneNumber", "+10000000000"
+                        "phoneNumber", "+10000000000",
+                        "transactionId", "DEMO-TXN",
+                        "ticketAmount", "750.00"
                 ))
                 .exchange()
                 .expectStatus().isBadRequest();
+    }
+
+    @Test
+    void lookupByPhoneAndNameReturnsTransactionDetails() {
+        Map issueBody = webTestClient.post()
+                .uri("/api/tickets/issue")
+                .bodyValue(issueRequestPayload())
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(Map.class)
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(issueBody).isNotNull();
+        String phone = issueRequestPayload().get("phoneNumber");
+        String name = issueRequestPayload().get("fullName");
+
+        webTestClient.get()
+                .uri(uriBuilder -> uriBuilder.path("/api/transactions/by-phone").queryParam("phoneNumber", phone).build())
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(Map.class)
+                .value(body -> {
+                    assertThat(body.get("fullName")).isEqualTo(name);
+                    assertThat(body.get("phoneNumber")).isEqualTo(phone);
+                    assertThat(body.get("ticketAmount")).isEqualTo("750.00");
+                });
+
+        webTestClient.get()
+                .uri(uriBuilder -> uriBuilder.path("/api/transactions/by-name").queryParam("fullName", name).build())
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(Map.class)
+                .value(body -> {
+                    assertThat(body.get("fullName")).isEqualTo(name);
+                    assertThat(body.get("ticketAmount")).isEqualTo("750.00");
+                });
     }
 
     private Map<String, String> issueRequestPayload() {
@@ -325,7 +385,9 @@ class TicketControllerIntegrationTest {
                 "showName", "Test Show",
                 "fullName", "Test User",
                 "email", "test@example.com",
-                "phoneNumber", "+10000000000"
+                "phoneNumber", "1000000000",
+                "transactionId", "DEMO-TXN",
+                "ticketAmount", "750.00"
         );
     }
 }
