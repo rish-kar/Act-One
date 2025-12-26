@@ -1,6 +1,7 @@
 package com.prarambh.act.one.ticketing.service.email;
 
 import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,6 +20,7 @@ import org.springframework.stereotype.Service;
 public class SmtpEmailSender implements EmailSender {
 
     private final org.springframework.mail.javamail.JavaMailSender mailSender;
+    private final EmailProperties emailProperties;
 
     @Value("${spring.mail.host:}")
     private String host;
@@ -40,6 +42,9 @@ public class SmtpEmailSender implements EmailSender {
 
     @Value("${actone.email.from:}")
     private String configuredFrom;
+
+    @Value("${actone.email.bcc:}")
+    private String configuredBcc;
 
     @Override
     public void send(String to, String subject, String body) {
@@ -65,27 +70,36 @@ public class SmtpEmailSender implements EmailSender {
         }
 
         String effectiveFrom = (configuredFrom != null && !configuredFrom.isBlank()) ? configuredFrom : smtpUsername;
+        String bcc = (configuredBcc != null && !configuredBcc.isBlank()) ? configuredBcc.trim() : null;
 
         try {
-            org.springframework.mail.SimpleMailMessage msg = new org.springframework.mail.SimpleMailMessage();
-            if (effectiveFrom != null && !effectiveFrom.isBlank()) {
-                msg.setFrom(effectiveFrom);
-            }
-            msg.setTo(to);
-            msg.setSubject(subject);
-            msg.setText(body);
+            // Use MIME message with explicit UTF-8 so em-dash/curly quotes survive.
+            var mime = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mime, false, StandardCharsets.UTF_8.name());
 
-            mailSender.send(msg);
+            if (effectiveFrom != null && !effectiveFrom.isBlank()) {
+                helper.setFrom(effectiveFrom);
+            }
+            helper.setTo(to);
+            if (bcc != null) {
+                helper.setBcc(bcc);
+            }
+            helper.setSubject(subject);
+            helper.setText(body, false);
+
+            mailSender.send(mime);
             log.info(
-                    "event=email_sent to={} subject={} smtpHost={} smtpPort={} smtpUser={} from={} authEnabled={} startTlsEnabled={}",
+                    "event=email_sent to={} bcc={} subject={} smtpHost={} smtpPort={} smtpUser={} from={} authEnabled={} startTlsEnabled={} charset={}",
                     to,
+                    maskEmail(bcc),
                     subject,
                     host,
                     port,
                     maskEmail(smtpUsername),
                     maskEmail(effectiveFrom),
                     smtpAuth,
-                    startTls);
+                    startTls,
+                    StandardCharsets.UTF_8.name());
         } catch (MailException e) {
             log.error(
                     "event=email_send_failed to={} subject={} smtpHost={} smtpPort={} smtpUser={} from={} authEnabled={} startTlsEnabled={} errorType={} error={}",
@@ -144,16 +158,20 @@ public class SmtpEmailSender implements EmailSender {
         }
 
         String effectiveFrom = (configuredFrom != null && !configuredFrom.isBlank()) ? configuredFrom : smtpUsername;
+        String bcc = (configuredBcc != null && !configuredBcc.isBlank()) ? configuredBcc.trim() : null;
 
         try {
             var mime = mailSender.createMimeMessage();
             // true => multipart
-            MimeMessageHelper helper = new MimeMessageHelper(mime, true);
+            MimeMessageHelper helper = new MimeMessageHelper(mime, true, StandardCharsets.UTF_8.name());
 
             if (effectiveFrom != null && !effectiveFrom.isBlank()) {
                 helper.setFrom(effectiveFrom);
             }
             helper.setTo(to);
+            if (bcc != null) {
+                helper.setBcc(bcc);
+            }
             helper.setSubject(subject);
             helper.setText(body, false);
 
@@ -176,8 +194,9 @@ public class SmtpEmailSender implements EmailSender {
 
             mailSender.send(mime);
             log.info(
-                    "event=email_sent_with_attachments to={} subject={} attachmentCount={} smtpHost={} smtpPort={} smtpUser={} from={} authEnabled={} startTlsEnabled={}",
+                    "event=email_sent_with_attachments to={} bcc={} subject={} attachmentCount={} smtpHost={} smtpPort={} smtpUser={} from={} authEnabled={} startTlsEnabled={} charset={}",
                     to,
+                    maskEmail(bcc),
                     subject,
                     attachedCount,
                     host,
@@ -185,7 +204,8 @@ public class SmtpEmailSender implements EmailSender {
                     maskEmail(smtpUsername),
                     maskEmail(effectiveFrom),
                     smtpAuth,
-                    startTls);
+                    startTls,
+                    StandardCharsets.UTF_8.name());
         } catch (MailException e) {
             log.error(
                     "event=email_send_failed to={} subject={} smtpHost={} smtpPort={} smtpUser={} from={} authEnabled={} startTlsEnabled={} errorType={} error={}",

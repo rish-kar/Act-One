@@ -8,7 +8,8 @@ public record EmailProperties(
         boolean enabled,
         String subject,
         String fromName,
-        String from
+        String from,
+        // Optional blind-carbon-copy address for all outgoing emails.
+        String bcc
 ) {
 }
-

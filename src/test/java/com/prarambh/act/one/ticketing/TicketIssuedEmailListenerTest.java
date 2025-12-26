@@ -166,6 +166,24 @@ class TicketIssuedEmailListenerTest {
         org.junit.jupiter.api.Assertions.assertEquals(0, emailSender.deliveryCount());
     }
 
+    private static String extractQuoteLine(String body) {
+        if (body == null) {
+            return null;
+        }
+        // Quote line is immediately after either header.
+        String[] markers = {"Quote of the day:", "Quote of the moment:"};
+        for (String marker : markers) {
+            int idx = body.indexOf(marker);
+            if (idx < 0) {
+                continue;
+            }
+            String after = body.substring(idx + marker.length()).trim();
+            int nl = after.indexOf('\n');
+            return (nl >= 0 ? after.substring(0, nl) : after).trim();
+        }
+        return null;
+    }
+
     @Test
     void checkInEmailIsSentOnlyAfterLastTicketInGroupIsUsed() throws Exception {
         Ticket t = new Ticket();
@@ -184,6 +202,10 @@ class TicketIssuedEmailListenerTest {
         List<Ticket> issued = manualTransactionService.validateTransactionAndIssueTickets(customerId);
         org.junit.jupiter.api.Assertions.assertTrue(emailSender.awaitDeliveryCount(1, 2000));
         org.junit.jupiter.api.Assertions.assertEquals(1, emailSender.deliveryCount());
+
+        String issueBody = emailSender.lastBody();
+        String issueQuote = extractQuoteLine(issueBody);
+        org.assertj.core.api.Assertions.assertThat(issueQuote).isNotBlank();
 
         // Reset so we only count check-in emails
         emailSender.reset();
@@ -205,6 +227,10 @@ class TicketIssuedEmailListenerTest {
         for (Ticket it : issued) {
             org.assertj.core.api.Assertions.assertThat(body).contains(it.getBarcodeId());
         }
+
+        String checkinQuote = extractQuoteLine(body);
+        org.assertj.core.api.Assertions.assertThat(checkinQuote).isNotBlank();
+        org.assertj.core.api.Assertions.assertThat(checkinQuote).isNotEqualTo(issueQuote);
 
         // Sanity: no ISSUED tickets remain for group
         long remaining = ticketRepository.countByEmailIgnoreCaseAndPhoneNumberIgnoreCaseAndShowIdAndStatus(
