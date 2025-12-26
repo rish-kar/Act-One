@@ -21,8 +21,9 @@ class TicketControllerIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        String baseUrl = System.getenv().getOrDefault("ACTONE_API_BASE", "http://localhost:" + port);
         this.webTestClient = WebTestClient.bindToServer()
-                .baseUrl("http://localhost:" + port)
+                .baseUrl(baseUrl)
                 .build();
     }
 
@@ -62,7 +63,9 @@ class TicketControllerIntegrationTest {
                         "fullName", "Test User",
                         "email", "test@example.com",
                         "phoneNumber", "+10000000000",
-                        "ticketCount", 3
+                        "ticketCount", 3,
+                        "transactionId", "DEMO-TXN",
+                        "ticketAmount", "750.00"
                 ))
                 .exchange()
                 .expectStatus().isOk()
@@ -130,7 +133,7 @@ class TicketControllerIntegrationTest {
                 .expectStatus().isOk()
                 .expectBody(Map.class)
                 .value(body -> {
-                    assertThat(body.get("newStatus")).isEqualTo("ISSUED");
+                    assertThat(body.get("ticketStatus")).isEqualTo("ISSUED");
                 });
 
         Map first = webTestClient.post()
@@ -238,7 +241,9 @@ class TicketControllerIntegrationTest {
                 .bodyValue(Map.of(
                         "fullName", "Test User",
                         "email", "test@example.com",
-                        "phoneNumber", "+10000000000"
+                        "phoneNumber", "+10000000000",
+                        "transactionId", "DEMO-TXN",
+                        "ticketAmount", "750.00"
                 ))
                 .exchange()
                 .expectStatus().isBadRequest()
@@ -301,7 +306,9 @@ class TicketControllerIntegrationTest {
                 .bodyValue(Map.of(
                         "fullName", "Test User",
                         "email", "test@example.com",
-                        "phoneNumber", "+10000000000"
+                        "phoneNumber", "+10000000000",
+                        "transactionId", "DEMO-TXN",
+                        "ticketAmount", "750.00"
                 ))
                 .exchange()
                 .expectStatus().isOk()
@@ -328,10 +335,49 @@ class TicketControllerIntegrationTest {
                 .bodyValue(Map.of(
                         "fullName", "Test User",
                         "email", "test@example.com",
-                        "phoneNumber", "+10000000000"
+                        "phoneNumber", "+10000000000",
+                        "transactionId", "DEMO-TXN",
+                        "ticketAmount", "750.00"
                 ))
                 .exchange()
                 .expectStatus().isBadRequest();
+    }
+
+    @Test
+    void lookupByPhoneAndNameReturnsTransactionDetails() {
+        Map issueBody = webTestClient.post()
+                .uri("/api/tickets/issue")
+                .bodyValue(issueRequestPayload())
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(Map.class)
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(issueBody).isNotNull();
+        String phone = issueRequestPayload().get("phoneNumber");
+        String name = issueRequestPayload().get("fullName");
+
+        webTestClient.get()
+                .uri(uriBuilder -> uriBuilder.path("/api/transactions/by-phone").queryParam("phoneNumber", phone).build())
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(Map.class)
+                .value(body -> {
+                    assertThat(body.get("fullName")).isEqualTo(name);
+                    assertThat(body.get("phoneNumber")).isEqualTo(phone);
+                    assertThat(body.get("ticketAmount")).isEqualTo("750.00");
+                });
+
+        webTestClient.get()
+                .uri(uriBuilder -> uriBuilder.path("/api/transactions/by-name").queryParam("fullName", name).build())
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(Map.class)
+                .value(body -> {
+                    assertThat(body.get("fullName")).isEqualTo(name);
+                    assertThat(body.get("ticketAmount")).isEqualTo("750.00");
+                });
     }
 
     private Map<String, String> issueRequestPayload() {
@@ -339,7 +385,9 @@ class TicketControllerIntegrationTest {
                 "showName", "Test Show",
                 "fullName", "Test User",
                 "email", "test@example.com",
-                "phoneNumber", "+10000000000"
+                "phoneNumber", "1000000000",
+                "transactionId", "DEMO-TXN",
+                "ticketAmount", "750.00"
         );
     }
 }

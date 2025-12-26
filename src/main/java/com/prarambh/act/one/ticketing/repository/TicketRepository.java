@@ -66,4 +66,8 @@ public interface TicketRepository extends JpaRepository<Ticket, UUID> {
 
     /** Find first ticket by transactionId */
     Optional<Ticket> findFirstByTransactionId(String transactionId);
+
+    List<Ticket> findByPhoneNumber(String phoneNumber);
+
+    List<Ticket> findByFullNameIgnoreCase(String fullName);
 }

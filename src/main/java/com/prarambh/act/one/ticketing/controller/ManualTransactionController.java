@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -31,65 +32,22 @@ public class ManualTransactionController {
     private final ManualTransactionService manualTransactionService;
     private final TicketRepository ticketRepository;
 
+    @Value("${actone.admin.purge-password:}")
+    private String adminPassword;
+
     /**
      * Record a successful transaction (manual verification pending).
      *
      * <p>Creates ticket rows in TRANSACTION_MADE and assigns a 4-digit customerId.
      */
-    @GetMapping("/record")
-    public ResponseEntity<?> getTransactionDetails(@RequestParam int customerId) {
-        Ticket latest = ticketRepository.findFirstByCustomerIdAndStatusOrderByCreatedAtDateDescCreatedAtTimeDesc(customerId, TicketStatus.TRANSACTION_MADE);
-        if (latest == null) {
-            return ResponseEntity.status(404).body(Map.of(
-                    "message", "Customer not found",
-                    "customerId", customerId
-            ));
-        }
-
-        Map<String, Object> response = new LinkedHashMap<>();
-        response.put("customerId", latest.getCustomerId());
-        response.put("fullName", latest.getFullName());
-        response.put("phoneNumber", latest.getPhoneNumber());
-        response.put("ticketCount", latest.getTicketCount());
-        response.put("transactionId", latest.getTransactionId());
-        response.put("ticketAmount", latest.getTicketAmount());
-
-        return ResponseEntity.ok(response);
-    }
-
-    /**
-     * List customers who have at least one ticket in TRANSACTION_MADE.
-     */
-    @GetMapping("/successful")
-    public ResponseEntity<?> getSuccessfulTransactions() {
-        List<Integer> customerIds = ticketRepository.findDistinctCustomerIdsByStatus(TicketStatus.TRANSACTION_MADE);
-
-        List<Map<String, Object>> customers = new ArrayList<>();
-        for (Integer customerId : customerIds) {
-            List<Ticket> tickets = ticketRepository.findByCustomerId(customerId);
-            if (tickets.isEmpty()) {
-                continue;
-            }
-            Ticket first = tickets.get(0);
-
-            List<String> txnIds = tickets.stream()
-                    .map(Ticket::getTransactionId)
-                    .filter(s -> s != null && !s.isBlank())
-                    .distinct()
-                    .toList();
-
-            Map<String, Object> entry = new LinkedHashMap<>();
-            entry.put("customerId", customerId);
-            entry.put("fullName", first.getFullName());
-            entry.put("phoneNumber", first.getPhoneNumber());
-            entry.put("email", first.getEmail());
-            entry.put("ticketStatus", TicketStatus.TRANSACTION_MADE.name());
-            entry.put("ticketCount", tickets.size());
-            entry.put("transactionIds", txnIds);
-            customers.add(entry);
-        }
-
-        return ResponseEntity.ok(customers);
+    @PostMapping("/record")
+    public ResponseEntity<?> recordTransaction(@Valid @RequestBody RecordTransactionRequest req) {
+        ManualTransactionService.ManualTransactionResult result = manualTransactionService.recordTransaction(req);
+        return ResponseEntity.ok(Map.of(
+                "customerId", result.customerId(),
+                "ticketCount", result.ticketCount(),
+                "status", TicketStatus.TRANSACTION_MADE.name()
+        ));
     }
 
     /**
@@ -98,24 +56,130 @@ public class ManualTransactionController {
     @PostMapping("/{customerId}/validate")
     public ResponseEntity<?> validateAndIssue(@PathVariable int customerId) {
         List<Ticket> issued = manualTransactionService.validateTransactionAndIssueTickets(customerId);
-
-        // Get transaction details from the first ticket
+        if (issued.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("message", "Customer not found", "customerId", customerId));
+        }
         Ticket first = issued.get(0);
-        List<String> txnIds = issued.stream()
-                .map(Ticket::getTransactionId)
-                .filter(s -> s != null && !s.isBlank())
-                .distinct()
-                .toList();
-
         return ResponseEntity.ok(Map.of(
                 "customerId", customerId,
                 "fullName", first.getFullName(),
-                "email", first.getEmail() != null ? first.getEmail() : "",
                 "phoneNumber", first.getPhoneNumber(),
-                "transactionIds", txnIds,
-                "issuedCount", issued.size(),
-                "newStatus", TicketStatus.ISSUED.name()
+                "ticketCount", issued.size(),
+                "ticketAmount", first.getTicketAmount(),
+                "transactionId", first.getTransactionId(),
+                "ticketStatus", TicketStatus.ISSUED.name()
         ));
+    }
+
+    /**
+     * Retrieve transaction details by phone number.
+     */
+    @GetMapping("/by-phone")
+    public ResponseEntity<?> getByPhone(@RequestParam String phoneNumber) {
+        String last10 = normalizePhoneLast10(phoneNumber);
+        List<Ticket> tickets = ticketRepository.findByPhoneNumberEndingWith(last10);
+        return summarizeTickets(tickets);
+    }
+
+    private static String normalizePhoneLast10(String input) {
+        if (input == null) {
+            return null;
+        }
+        String digits = input.replaceAll("\\D", "");
+        if (digits.length() <= 10) {
+            return digits;
+        }
+        return digits.substring(digits.length() - 10);
+    }
+
+    /**
+     * Retrieve transaction details by customer name.
+     */
+    @GetMapping("/by-name")
+    public ResponseEntity<?> getByName(@RequestParam String fullName) {
+        List<Ticket> tickets = ticketRepository.findByFullNameIgnoreCase(fullName);
+        return summarizeTickets(tickets);
+    }
+
+    private ResponseEntity<?> summarizeTickets(List<Ticket> tickets) {
+        if (tickets == null || tickets.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("message", "No matching records"));
+        }
+        Ticket first = tickets.get(0);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("customerId", first.getCustomerId());
+        payload.put("fullName", first.getFullName());
+        payload.put("phoneNumber", first.getPhoneNumber());
+        payload.put("ticketCount", tickets.size());
+        payload.put("ticketAmount", first.getTicketAmount() != null ? first.getTicketAmount().toPlainString() : null);
+        payload.put("transactionId", first.getTransactionId());
+        payload.put("ticketStatus", first.getStatus() != null ? first.getStatus().name() : null);
+        return ResponseEntity.ok(payload);
+    }
+
+    /**
+     * Admin endpoint: issue tickets by customer ID.
+     */
+    @PostMapping("/{customerId}/issue")
+    public ResponseEntity<?> issueByCustomerId(@PathVariable int customerId) {
+        List<Ticket> issued = manualTransactionService.validateTransactionAndIssueTickets(customerId);
+        if (issued.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("message", "Customer not found", "customerId", customerId));
+        }
+        return ResponseEntity.ok(Map.of(
+                "message", "Ticket is confirmed",
+                "customerId", customerId,
+                "issuedCount", issued.size()
+        ));
+    }
+
+    /**
+     * Admin endpoint: check-in by customer ID.
+     */
+    @PostMapping("/{customerId}/checkin")
+    public ResponseEntity<?> checkInByCustomerId(@PathVariable int customerId) {
+        int used = manualTransactionService.checkInByCustomerId(customerId);
+        if (used == 0) {
+            return ResponseEntity.status(404).body(Map.of("message", "Customer not found", "customerId", customerId));
+        }
+        return ResponseEntity.ok(Map.of(
+                "message", "Check-in successful",
+                "customerId", customerId,
+                "usedCount", used
+        ));
+    }
+
+    private boolean isAdminPasswordValid(String headerPassword) {
+        return adminPassword != null && !adminPassword.isBlank() && headerPassword != null && adminPassword.equals(headerPassword);
+    }
+
+    @GetMapping("/successful")
+    public ResponseEntity<?> successful(
+            @RequestHeader(value = "X-Admin-Password", required = false) String headerPassword
+    ) {
+        if (!isAdminPasswordValid(headerPassword)) {
+            return ResponseEntity.status(403).body(Map.of("message", "Invalid admin password"));
+        }
+
+        List<Integer> customerIds = ticketRepository.findDistinctCustomerIdsByStatus(TicketStatus.TRANSACTION_MADE);
+        List<Map<String, Object>> customers = new ArrayList<>();
+        for (Integer customerId : customerIds) {
+            List<Ticket> tickets = ticketRepository.findByCustomerIdAndStatus(customerId, TicketStatus.TRANSACTION_MADE);
+            if (tickets.isEmpty()) {
+                continue;
+            }
+            Ticket first = tickets.get(0);
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("customerId", customerId);
+            entry.put("fullName", first.getFullName());
+            entry.put("phoneNumber", first.getPhoneNumber());
+            entry.put("ticketCount", tickets.size());
+            entry.put("ticketAmount", first.getTicketAmount() != null ? first.getTicketAmount().toPlainString() : null);
+            entry.put("transactionId", first.getTransactionId());
+            entry.put("ticketStatus", TicketStatus.TRANSACTION_MADE.name());
+            customers.add(entry);
+        }
+        return ResponseEntity.ok(customers);
     }
 
     public record RecordTransactionRequest(
@@ -125,9 +189,9 @@ public class ManualTransactionController {
             String email,
             @NotBlank String phoneNumber,
             @Min(1) Integer ticketCount,
-            @NotBlank String transactionId
+            @NotBlank String transactionId,
+            @jakarta.validation.constraints.NotNull java.math.BigDecimal ticketAmount
     ) {
-
         public int effectiveTicketCount() {
             return ticketCount == null ? 1 : ticketCount;
         }

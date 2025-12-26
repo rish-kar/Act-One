@@ -103,7 +103,9 @@ class TicketIssuedEmailListenerTest {
         t.setShowName("Test Show");
         t.setFullName("Test User");
         t.setEmail("test@example.com");
-        t.setPhoneNumber("+10000000000");
+        t.setPhoneNumber("1000000000");
+        t.setTransactionId("DEMO-TXN-1");
+        t.setTicketAmount(new java.math.BigDecimal("750.00"));
 
         // issueTicket now creates ticket with TRANSACTION_MADE status - no email sent yet
         List<Ticket> tickets = ticketIssuanceService.issueTickets(t);
@@ -124,8 +126,10 @@ class TicketIssuedEmailListenerTest {
         t.setShowName("Test Show");
         t.setFullName("Test User");
         t.setEmail("test@example.com");
-        t.setPhoneNumber("+10000000000");
+        t.setPhoneNumber("1000000000");
         t.setTicketCount(3);
+        t.setTransactionId("DEMO-TXN-2");
+        t.setTicketAmount(new java.math.BigDecimal("750.00"));
 
         // issueTickets now creates tickets with TRANSACTION_MADE status - no email sent yet
         List<Ticket> tickets = ticketIssuanceService.issueTickets(t);
@@ -146,8 +150,10 @@ class TicketIssuedEmailListenerTest {
         t.setShowName("Test Show");
         t.setFullName("Test User");
         t.setEmail(null);
-        t.setPhoneNumber("+10000000000");
+        t.setPhoneNumber("1000000000");
         t.setTicketCount(3);
+        t.setTransactionId("DEMO-TXN-3");
+        t.setTicketAmount(new java.math.BigDecimal("750.00"));
 
         List<Ticket> tickets = ticketIssuanceService.issueTickets(t);
 
@@ -166,8 +172,10 @@ class TicketIssuedEmailListenerTest {
         t.setShowName("Test Show");
         t.setFullName("Test User");
         t.setEmail("test@example.com");
-        t.setPhoneNumber("+10000000000");
+        t.setPhoneNumber("1000000000");
         t.setTicketCount(3);
+        t.setTransactionId("DEMO-TXN-4");
+        t.setTicketAmount(new java.math.BigDecimal("750.00"));
 
         List<Ticket> tickets = ticketIssuanceService.issueTickets(t);
 

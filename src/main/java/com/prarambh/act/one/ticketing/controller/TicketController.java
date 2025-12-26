@@ -74,7 +74,7 @@ public class TicketController {
         ticket.setShowName(resolvedShowName);
         ticket.setFullName(request.fullName());
         ticket.setEmail(request.email());
-        ticket.setPhoneNumber(request.phoneNumber());
+        ticket.setPhoneNumber(normalizePhoneLast10(request.phoneNumber()));
         ticket.setTicketCount(request.ticketCount() == null ? 1 : request.ticketCount());
         ticket.setTransactionId(request.transactionId());
         ticket.setTicketAmount(request.ticketAmount());
@@ -352,5 +352,16 @@ public class TicketController {
         static String formatIstTime(LocalTime time) {
             return time == null ? null : time.format(IST_12H_TIME);
         }
+    }
+
+    private static String normalizePhoneLast10(String input) {
+        if (input == null) {
+            return null;
+        }
+        String digits = input.replaceAll("\\D", "");
+        if (digits.length() <= 10) {
+            return digits;
+        }
+        return digits.substring(digits.length() - 10);
     }
 }

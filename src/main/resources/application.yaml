@@ -41,9 +41,9 @@ spring:
             enable: ${ACTONE_SMTP_STARTTLS:true}
             required: ${ACTONE_SMTP_STARTTLS_REQUIRED:true}
           # If your network blocks 587, you can switch to 465 and set ACTONE_SMTP_STARTTLS=false.
-          connectiontimeout: 15000
-          timeout: 15000
-          writetimeout: 15000
+          connectiontimeout: 150000
+          timeout: 150000
+          writetimeout: 150000
         # Helps JavaMail trust the server cert chain on some Windows machines.
         ssl:
           trust: ${ACTONE_SMTP_SSL_TRUST:${ACTONE_SMTP_HOST:smtp.gmail.com}}

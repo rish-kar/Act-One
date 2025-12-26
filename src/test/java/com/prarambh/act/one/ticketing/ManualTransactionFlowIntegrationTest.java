@@ -22,8 +22,9 @@ class ManualTransactionFlowIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        String baseUrl = System.getenv().getOrDefault("ACTONE_API_BASE", "http://localhost:" + port);
         this.webTestClient = WebTestClient.bindToServer()
-                .baseUrl("http://localhost:" + port)
+                .baseUrl(baseUrl)
                 .build();
     }
 
@@ -38,7 +39,8 @@ class ManualTransactionFlowIntegrationTest {
                         "email", "txn@example.com",
                         "phoneNumber", "+911234567890",
                         "ticketCount", 2,
-                        "transactionId", "UPI_TXN_123"
+                        "transactionId", "UPI_TXN_123",
+                        "ticketAmount", "500.00"
                 ))
                 .exchange()
                 .expectStatus().isOk()
@@ -56,6 +58,7 @@ class ManualTransactionFlowIntegrationTest {
         // 2) list successful transactions includes this customerId
         List<Map> list = webTestClient.get()
                 .uri("/api/transactions/successful")
+                .header("X-Admin-Password", "prarambh-admin-delhi")
                 .exchange()
                 .expectStatus().isOk()
                 .expectBodyList(Map.class)
@@ -75,10 +78,9 @@ class ManualTransactionFlowIntegrationTest {
                 .getResponseBody();
 
         assertThat(validate1).isNotNull();
-        assertThat(((Number) validate1.get("issuedCount")).intValue()).isEqualTo(2);
-        assertThat(validate1.get("newStatus")).isEqualTo("ISSUED");
+        assertThat(((Number) validate1.get("ticketCount")).intValue()).isEqualTo(2);
+        assertThat(validate1.get("ticketStatus")).isEqualTo("ISSUED");
 
-        // 4) validate again -> should be no-op and still return issuedCount=2
         Map validate2 = webTestClient.post()
                 .uri("/api/transactions/{customerId}/validate", customerId)
                 .exchange()
@@ -88,8 +90,8 @@ class ManualTransactionFlowIntegrationTest {
                 .getResponseBody();
 
         assertThat(validate2).isNotNull();
-        assertThat(((Number) validate2.get("issuedCount")).intValue()).isEqualTo(2);
-        assertThat(validate2.get("newStatus")).isEqualTo("ISSUED");
+        assertThat(((Number) validate2.get("ticketCount")).intValue()).isEqualTo(2);
+        assertThat(validate2.get("ticketStatus")).isEqualTo("ISSUED");
 
         // sanity: tickets listing shows those tickets now ISSUED and has customerId/transactionId
         webTestClient.get()
@@ -112,4 +114,3 @@ class ManualTransactionFlowIntegrationTest {
                 });
     }
 }
-

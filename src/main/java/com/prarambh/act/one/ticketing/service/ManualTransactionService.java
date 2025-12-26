@@ -1,10 +1,12 @@
 package com.prarambh.act.one.ticketing.service;
 
+import com.prarambh.act.one.ticketing.controller.*;
 import com.prarambh.act.one.ticketing.model.Ticket;
 import com.prarambh.act.one.ticketing.model.TicketStatus;
 import com.prarambh.act.one.ticketing.repository.TicketRepository;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -23,30 +25,37 @@ public class ManualTransactionService {
     private final TicketRepository ticketRepository;
     private final CustomerIdService customerIdService;
     private final TicketIssuanceService ticketIssuanceService;
+    private final TicketCheckInService ticketCheckInService;
 
     @Transactional
-    public ManualTransactionResult recordTransaction(RecordTransactionRequest req) {
-        if (req.ticketCount() <= 0) {
+    public ManualTransactionResult recordTransaction(ManualTransactionController.RecordTransactionRequest req) {
+        if (req.effectiveTicketCount() <= 0) {
             throw new IllegalArgumentException("ticketCount must be >= 1");
         }
-        if (req.transactionId() == null || req.transactionId().isBlank()) {
-            throw new IllegalArgumentException("transactionId is required");
-        }
 
-        int customerId = customerIdService.allocateUniqueCustomerId();
+        Optional<Ticket> existingForTxn = req.transactionId() != null
+                ? ticketRepository.findFirstByTransactionId(req.transactionId())
+                : Optional.empty();
+
+        int customerId = existingForTxn
+                .map(Ticket::getCustomerId)
+                .filter(id -> id != null)
+                .orElseGet(customerIdService::allocateUniqueCustomerId);
+
+        String normalizedPhone = normalizePhoneLast10(req.phoneNumber());
 
         Ticket purchase = new Ticket();
         purchase.setShowName(req.showName());
         purchase.setShowId(req.showId());
         purchase.setFullName(req.fullName());
         purchase.setEmail(req.email());
-        purchase.setPhoneNumber(req.phoneNumber());
+        purchase.setPhoneNumber(normalizedPhone);
         purchase.setCustomerId(customerId);
         purchase.setTransactionId(req.transactionId().trim());
+        purchase.setTicketAmount(req.ticketAmount());
         purchase.setStatus(TicketStatus.TRANSACTION_MADE);
-        purchase.setTicketCount(req.ticketCount());
+        purchase.setTicketCount(req.effectiveTicketCount());
 
-        // Create N ticket rows but DO NOT issue email/cards (status is not ISSUED).
         int count = purchase.getTicketCount();
         List<Ticket> saved = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
@@ -55,9 +64,10 @@ public class ManualTransactionService {
             t.setShowId(purchase.getShowId());
             t.setFullName(purchase.getFullName());
             t.setEmail(purchase.getEmail());
-            t.setPhoneNumber(purchase.getPhoneNumber());
+            t.setPhoneNumber(normalizedPhone);
             t.setCustomerId(customerId);
             t.setTransactionId(purchase.getTransactionId());
+            t.setTicketAmount(purchase.getTicketAmount());
             t.setStatus(TicketStatus.TRANSACTION_MADE);
             t.setTicketCount(count);
             saved.add(ticketRepository.save(t));
@@ -101,15 +111,37 @@ public class ManualTransactionService {
         return issued;
     }
 
-    public record RecordTransactionRequest(
-            String showId,
-            String showName,
-            String fullName,
-            String email,
-            String phoneNumber,
-            int ticketCount,
-            String transactionId
-    ) {}
+    @Transactional
+    public int checkInByCustomerId(int customerId) {
+        List<Ticket> tickets = ticketRepository.findByCustomerId(customerId);
+        if (tickets.isEmpty()) {
+            return 0;
+        }
+
+        int updated = 0;
+        // Route through the check-in service so the purchase-level check-in email event is published.
+        for (Ticket t : tickets) {
+            if (t.getBarcodeId() == null || t.getBarcodeId().isBlank()) {
+                continue;
+            }
+            Ticket saved = ticketCheckInService.checkInByBarcode(t.getBarcodeId()).orElse(null);
+            if (saved != null && saved.getStatus() == TicketStatus.USED) {
+                updated++;
+            }
+        }
+        return updated;
+    }
+
+    private static String normalizePhoneLast10(String input) {
+        if (input == null) {
+            return null;
+        }
+        String digits = input.replaceAll("\\D", "");
+        if (digits.length() <= 10) {
+            return digits;
+        }
+        return digits.substring(digits.length() - 10);
+    }
 
     public record ManualTransactionResult(int customerId, int ticketCount) {}
 }
