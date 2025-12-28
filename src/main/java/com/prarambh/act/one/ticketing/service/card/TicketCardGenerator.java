@@ -51,13 +51,20 @@ public class TicketCardGenerator {
     private static final double QR_X_RIGHT_FACTOR = 0.01;
 
     // Ticket label box size (position computed dynamically from template width).
-    private static final int TICKET_ID_W = 520;
-    private static final int TICKET_ID_H = 252;
+    // Increase ticket box width so a larger font can be used without shrinking.
+    private static final int TICKET_ID_W = 760;
+    private static final int TICKET_ID_H = 220;
     // Shift ticket number 5% right relative to centered X.
-    private static final double TICKET_RIGHT_SHIFT_FACTOR = 0.05;
+    // Shift ticket number horizontally: negative = left, positive = right.
+    // Moved 20% towards left as requested.
+    private static final double TICKET_RIGHT_SHIFT_FACTOR = 0;
     // Increase ticket fonts.
-    private static final float TICKET_LABEL_FONT_PX = 42f;
-    private static final float TICKET_VALUE_FONT_PX = 72f;
+    // Increased by 10% as requested
+    private static final float TICKET_LABEL_FONT_PX = 42.0f;
+    // Increased ticket number (value) size as requested — raised to 90px
+    private static final float TICKET_VALUE_FONT_PX = 72.0f;
+    // Enforce a minimum font so the value remains large even for long IDs.
+    private static final int TICKET_VALUE_MIN_FONT_PX = 36;
 
     // Y anchors (keep current vertical region; adjust only QR by -2% per request).
     private static final int QR_Y_BASE = 1904;
@@ -84,6 +91,7 @@ public class TicketCardGenerator {
 
         // Compute dynamic boxes from the real template dimensions.
         int templateW = template.getWidth();
+        int templateH = template.getHeight();
 
         // QR: center on X axis, reduce size, shift up by 2% (of base QR box height), and right by 1% (of template width).
         int qrRenderW = (int) Math.round(QR_BOX_W * QR_SCALE_FACTOR);
@@ -109,7 +117,7 @@ public class TicketCardGenerator {
             g.drawImage(qr, qrX, qrY, null);
 
             // Ticket number label in new position.
-            drawTicketId(g, ticket.getTicketId().toString(), templateW);
+            drawTicketId(g, ticket.getTicketId().toString(), templateW, templateH);
         } finally {
             g.dispose();
         }
@@ -273,7 +281,7 @@ public class TicketCardGenerator {
         }
     }
 
-    private static void drawTicketId(Graphics2D g, String ticketId, int templateW) {
+    private static void drawTicketId(Graphics2D g, String ticketId, int templateW, int templateH) {
         if (ticketId == null || ticketId.isBlank()) {
             return;
         }
@@ -290,9 +298,9 @@ public class TicketCardGenerator {
             FontRenderContext frc = g.getFontRenderContext();
 
             // Use Montserrat SemiBold if available, otherwise fall back.
-            Font base = new Font("Montserrat SemiBold", Font.PLAIN, 42);
+            Font base = new Font("Arial", Font.PLAIN, 42);
             if (base.getFamily().equalsIgnoreCase("Dialog")) {
-                base = new Font("SansSerif", Font.BOLD, 42);
+                base = new Font("Arial", Font.BOLD, 42);
             }
             Font font1 = base.deriveFont(Font.PLAIN, TICKET_LABEL_FONT_PX);
             Font font2 = base.deriveFont(Font.PLAIN, TICKET_VALUE_FONT_PX);
@@ -305,16 +313,17 @@ public class TicketCardGenerator {
             double w2 = layout2.getBounds().getWidth();
             double h2 = layout2.getBounds().getHeight();
 
-            for (int size = (int) TICKET_VALUE_FONT_PX; size >= 24 && w2 > (TICKET_ID_W - 12); size--) {
+            for (int size = (int) TICKET_VALUE_FONT_PX; size >= TICKET_VALUE_MIN_FONT_PX && w2 > (TICKET_ID_W - 12); size--) {
                 font2 = base.deriveFont((float) size);
                 layout2 = new TextLayout(ticketId, font2, frc);
                 w2 = layout2.getBounds().getWidth();
                 h2 = layout2.getBounds().getHeight();
             }
 
-            double lineGap = 12;
+            double lineGap = 20;
             double totalH = h1 + lineGap + h2;
-            double startY = TICKET_ID_Y1 + (TICKET_ID_H - totalH) / 2.0;
+            // Pull the ticket block down by 2% of the template height
+            double startY = templateH - TICKET_ID_H - 50 + (TICKET_ID_H - totalH) / 2.0 + (templateH * 0.02);
 
             // Ticket box centered on X axis, then shifted 5% right.
             int boxX1 = (templateW - TICKET_ID_W) / 2;
