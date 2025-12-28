@@ -54,7 +54,7 @@ public class SuffixCheckInController {
                     "suffix", normalized,
                     "candidates", matches.stream().map(t -> Map.of(
                             "ticketId", t.getTicketId(),
-                            "barcodeId", t.getBarcodeId(),
+                            "qrCodeId", t.getQrCodeId(),
                             "status", t.getStatus().name(),
                             "phoneNumber", t.getPhoneNumber()
                     )).toList()
@@ -62,14 +62,14 @@ public class SuffixCheckInController {
         }
 
         Ticket t = matches.get(0);
-        ticketCheckInService.checkInByBarcode(t.getBarcodeId());
-        log.warn("event=checkin_by_ticketid_suffix suffix={} ticketId={} barcodeId={}", normalized, t.getTicketId(), t.getBarcodeId());
+        ticketCheckInService.checkInByBarcode(t.getQrCodeId());
+        log.warn("event=checkin_by_ticketid_suffix suffix={} ticketId={} qrCodeId={}", normalized, t.getTicketId(), t.getQrCodeId());
 
         return ResponseEntity.ok(Map.of(
                 "result", "OK",
                 "suffix", normalized,
                 "ticketId", t.getTicketId(),
-                "barcodeId", t.getBarcodeId()
+                "qrCodeId", t.getQrCodeId()
         ));
     }
 }

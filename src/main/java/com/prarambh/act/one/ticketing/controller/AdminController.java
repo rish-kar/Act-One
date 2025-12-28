@@ -47,29 +47,21 @@ public class AdminController {
     /**
      * Validates the provided admin password.
      */
-    private boolean isAdminPasswordValid(String headerPassword, String bodyPassword) {
+    private boolean isAdminPasswordValid(String headerPassword) {
         if (purgePassword == null || purgePassword.isBlank()) {
             return false;
         }
-        boolean usedHeader = headerPassword != null && !headerPassword.isBlank();
-        String provided = usedHeader
-                ? headerPassword
-                : (bodyPassword != null && !bodyPassword.isBlank() ? bodyPassword : null);
-
-        boolean ok = provided != null && purgePassword.equals(provided);
-        log.debug("Admin password validation: providedVia={}, valid={}", usedHeader ? "header" : "body/none", ok);
-        return ok;
+        return headerPassword != null && !headerPassword.isBlank() && purgePassword.equals(headerPassword);
     }
 
     /**
      * Deletes ALL tickets from the database.
      *
-     * <p>Auth: {@code X-Admin-Password} header or body {@code {"password":"..."}}.
+     * <p>Auth: {@code X-Admin-Password} header.
      */
     @DeleteMapping("/tickets")
     public ResponseEntity<?> deleteAllTickets(
-            @RequestHeader(value = "X-Admin-Password", required = false) String headerPassword,
-            @RequestBody(required = false) PurgeRequest body
+            @RequestHeader(value = "X-Admin-Password", required = false) String headerPassword
     ) {
         log.warn("Admin purge request received (tickets delete-all)");
 
@@ -79,7 +71,7 @@ public class AdminController {
                     .body(Map.of("message", "Purge is not enabled"));
         }
 
-        if (!isAdminPasswordValid(headerPassword, body != null ? body.password() : null)) {
+        if (!isAdminPasswordValid(headerPassword)) {
             log.warn("Admin purge rejected: invalid password");
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("message", "Invalid admin password"));
@@ -100,8 +92,7 @@ public class AdminController {
      */
     @GetMapping("/show-name")
     public ResponseEntity<?> getDefaultShowName(
-            @RequestHeader(value = "X-Admin-Password", required = false) String headerPassword,
-            @RequestBody(required = false) PurgeRequest body
+            @RequestHeader(value = "X-Admin-Password", required = false) String headerPassword
     ) {
         log.info("Admin get default show-name request received");
 
@@ -110,7 +101,7 @@ public class AdminController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("message", "Admin endpoints are not enabled"));
         }
-        if (!isAdminPasswordValid(headerPassword, body != null ? body.password() : null)) {
+        if (!isAdminPasswordValid(headerPassword)) {
             log.warn("Admin get show-name rejected: invalid password");
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("message", "Invalid admin password"));
@@ -126,9 +117,6 @@ public class AdminController {
 
     /**
      * Sets (or clears) the default show name.
-     *
-     * <p>Extra behavior: when a new default is set, all existing tickets are updated to reflect
-     * the new show name, so the change is visible everywhere.
      */
     @PostMapping("/show-name")
     @Transactional
@@ -146,7 +134,7 @@ public class AdminController {
                     .body(Map.of("message", "Admin endpoints are not enabled"));
         }
 
-        if (!isAdminPasswordValid(headerPassword, body != null ? body.password() : null)) {
+        if (!isAdminPasswordValid(headerPassword)) {
             log.warn("Admin set show-name rejected: invalid password");
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("message", "Invalid admin password"));
@@ -187,14 +175,8 @@ public class AdminController {
     }
 
     /**
-     * Minimal body wrapper for endpoints that accept a password.
-     */
-    public record PurgeRequest(String password) {
-    }
-
-    /**
      * Request body for configuring/clearing the default show name.
      */
-    public record ShowNameRequest(String password, String showName, Boolean clear) {
+    public record ShowNameRequest(String showName, Boolean clear) {
     }
 }

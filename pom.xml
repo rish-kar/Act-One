@@ -77,7 +77,7 @@
 			<scope>test</scope>
 		</dependency>
 
-		<!-- QR/barcode generation for ticket cards -->
+		<!-- QR code generation for ticket cards -->
 		<dependency>
 			<groupId>com.google.zxing</groupId>
 			<artifactId>core</artifactId>

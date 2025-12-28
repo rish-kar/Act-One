@@ -51,7 +51,7 @@ public class TicketController {
      * use the admin-configured default show name (see {@code /api/admin/show-name}).
      *
      * @param request issue payload
-     * @return ticket id, barcode id, status, and show info
+     * @return ticket id, qrCode Id, status, and show info
      */
     @PostMapping("/issue")
     public ResponseEntity<?> issueTicket(@Valid @RequestBody IssueTicketRequest request) {
@@ -83,9 +83,9 @@ public class TicketController {
         Ticket primary = savedTickets.get(0);
 
         log.info(
-                "event=ticket_recorded ticketId={} barcodeId={} showId={} showName={} status={} ticketCount={} customerId={}",
+                "event=ticket_recorded ticketId={} qrCodeId={} showId={} showName={} status={} ticketCount={} customerId={}",
                 primary.getTicketId(),
-                primary.getBarcodeId(),
+                primary.getQrCodeId(),
                 primary.getShowId(),
                 primary.getShowName(),
                 primary.getStatus(),
@@ -95,31 +95,31 @@ public class TicketController {
         Map<String, Object> response = new java.util.LinkedHashMap<>();
         response.put("ticketId", primary.getTicketId());
         response.put("status", primary.getStatus().name());
-        response.put("barcodeId", primary.getBarcodeId());
+        response.put("qrCodeId", primary.getQrCodeId());
         response.put("showId", primary.getShowId());
         response.put("showName", primary.getShowName());
         response.put("ticketCount", primary.getTicketCount());
         response.put("customerId", primary.getCustomerId());
         response.put("transactionId", primary.getTransactionId());
         response.put("ticketIds", savedTickets.stream().map(Ticket::getTicketId).collect(Collectors.toList()));
-        response.put("barcodeIds", savedTickets.stream().map(Ticket::getBarcodeId).collect(Collectors.toList()));
+        response.put("qrCodeIds", savedTickets.stream().map(Ticket::getQrCodeId).collect(Collectors.toList()));
         response.put("message", "Transaction recorded. Tickets will be issued after manual approval.");
 
         return ResponseEntity.ok(response);
     }
 
     /**
-     * Check in a ticket using its barcode id.
+     * Check in a ticket using its qrCode Id.
      *
      * <p>This is the primary endpoint intended for scanning at the venue.
      */
-    @PostMapping("/barcode/{barcodeId}/checkin")
-    public ResponseEntity<?> checkInByBarcode(@PathVariable String barcodeId) {
-        log.info("Check-in request received: barcodeId={}", barcodeId);
+    @PostMapping("/barcode/{qrCodeId}/checkin")
+    public ResponseEntity<?> checkInByBarcode(@PathVariable String qrCodeId) {
+        log.info("Check-in request received: qrCodeId={}", qrCodeId);
 
-        Optional<Ticket> ticketOpt = ticketRepository.findByBarcodeId(barcodeId);
+        Optional<Ticket> ticketOpt = ticketRepository.findByQrCodeId(qrCodeId);
         if (ticketOpt.isEmpty()) {
-            log.warn("Check-in NOT_FOUND: barcodeId={}", barcodeId);
+            log.warn("Check-in NOT_FOUND: qrCodeId={}", qrCodeId);
             return ResponseEntity.ok(Map.of(
                     "result", "NOT_FOUND",
                     "message", "Ticket not found"
@@ -128,8 +128,8 @@ public class TicketController {
 
         Ticket ticket = ticketOpt.get();
         if (ticket.getStatus() == TicketStatus.USED) {
-            log.info("Check-in ALREADY_USED: barcodeId={}, ticketId={}, usedAtDate={}, usedAtTimeIst={} ",
-                    barcodeId, ticket.getTicketId(), ticket.getUsedAtDate(), TicketResponse.formatIstTime(ticket.getUsedAtTime()));
+            log.info("Check-in ALREADY_USED: qrCodeId={}, ticketId={}, usedAtDate={}, usedAtTimeIst={} ",
+                    qrCodeId, ticket.getTicketId(), ticket.getUsedAtDate(), TicketResponse.formatIstTime(ticket.getUsedAtTime()));
             return ResponseEntity.ok(Map.of(
                     "result", "ALREADY_USED",
                     "message", "Ticket has already been checked in",
@@ -139,8 +139,8 @@ public class TicketController {
         }
 
         if (ticket.getStatus() == TicketStatus.TRANSACTION_MADE) {
-            log.warn("Check-in PENDING_APPROVAL: barcodeId={}, ticketId={}, customerId={}",
-                    barcodeId, ticket.getTicketId(), ticket.getCustomerId());
+            log.warn("Check-in PENDING_APPROVAL: qrCodeId={}, ticketId={}, customerId={}",
+                    qrCodeId, ticket.getTicketId(), ticket.getCustomerId());
             return ResponseEntity.ok(Map.of(
                     "result", "PENDING_APPROVAL",
                     "message", "Ticket not yet approved. Please contact admin.",
@@ -149,10 +149,10 @@ public class TicketController {
         }
 
         // NEW: check-in through service (publishes check-in email event)
-        Ticket saved = ticketCheckInService.checkInByBarcode(barcodeId).orElseThrow();
+        Ticket saved = ticketCheckInService.checkInByBarcode(qrCodeId).orElseThrow();
 
-        log.info("Check-in VALID: barcodeId={}, ticketId={}, set status=USED usedAtDate={} usedAtTimeIst={}",
-                barcodeId, saved.getTicketId(), saved.getUsedAtDate(), TicketResponse.formatIstTime(saved.getUsedAtTime()));
+        log.info("Check-in VALID: qrCodeId={}, ticketId={}, set status=USED usedAtDate={} usedAtTimeIst={}",
+                qrCodeId, saved.getTicketId(), saved.getUsedAtDate(), TicketResponse.formatIstTime(saved.getUsedAtTime()));
 
         return ResponseEntity.ok(Map.of(
                 "result", "VALID",
@@ -173,8 +173,8 @@ public class TicketController {
 
         return ticketRepository.findById(ticketId)
                 .<ResponseEntity<?>>map(ticket -> {
-                    log.info("Fetch ticket by ticketId found: ticketId={}, barcodeId={}, status={}, showId={}, showName='{}'",
-                            ticket.getTicketId(), ticket.getBarcodeId(), ticket.getStatus(), ticket.getShowId(), ticket.getShowName());
+                    log.info("Fetch ticket by ticketId found: ticketId={}, qrCodeId={}, status={}, showId={}, showName='{}'",
+                            ticket.getTicketId(), ticket.getQrCodeId(), ticket.getStatus(), ticket.getShowId(), ticket.getShowName());
                     return ResponseEntity.ok(TicketResponse.from(ticket));
                 })
                 .orElseGet(() -> {
@@ -198,7 +198,7 @@ public class TicketController {
      */
     @PostMapping("/{ticketId}/checkin")
     public ResponseEntity<?> checkIn(@PathVariable UUID ticketId) {
-        log.warn("Deprecated check-in endpoint used (ticketId). Prefer /api/tickets/barcode/{barcodeId}/checkin. ticketId={}", ticketId);
+        log.warn("Deprecated check-in endpoint used (ticketId). Prefer the QR-based endpoint /api/tickets/barcode/{qrCodeId}/checkin. ticketId={}", ticketId);
         log.info("Check-in request received: ticketId={}", ticketId);
 
         Optional<Ticket> ticketOpt = ticketRepository.findById(ticketId);
@@ -286,6 +286,53 @@ public class TicketController {
                 });
     }
 
+    /** Fetch all tickets for a given customerId. */
+    @GetMapping("/by-customer")
+    public ResponseEntity<List<TicketResponse>> getTicketsByCustomerId(@RequestParam("customerId") Integer customerId) {
+        log.info("Fetch tickets by customerId request received: customerId={}", customerId);
+        List<TicketResponse> tickets = ticketRepository.findByCustomerId(customerId)
+                .stream()
+                .map(TicketResponse::from)
+                .toList();
+        return ResponseEntity.ok(tickets);
+    }
+
+    /** Fetch tickets by full name (case-insensitive contains match). */
+    @GetMapping("/by-name")
+    public ResponseEntity<List<TicketResponse>> getTicketsByFullName(@RequestParam("fullName") String fullName) {
+        log.info("Fetch tickets by fullName request received: fullName='{}'", fullName);
+        String q = fullName == null ? "" : fullName.trim();
+        List<TicketResponse> tickets = ticketRepository.findByFullNameContainingIgnoreCase(q)
+                .stream()
+                .map(TicketResponse::from)
+                .toList();
+        return ResponseEntity.ok(tickets);
+    }
+
+    /** Fetch tickets by phone number (matches by last 10 digits). */
+    @GetMapping("/by-phone")
+    public ResponseEntity<List<TicketResponse>> getTicketsByPhone(@RequestParam("phoneNumber") String phoneNumber) {
+        String last10 = normalizePhoneLast10(phoneNumber);
+        log.info("Fetch tickets by phone request received: phoneNumber='{}' last10='{}'", phoneNumber, last10);
+        List<TicketResponse> tickets = ticketRepository.findByPhoneNumberEndingWith(last10)
+                .stream()
+                .map(TicketResponse::from)
+                .toList();
+        return ResponseEntity.ok(tickets);
+    }
+
+    /** Fetch tickets by email (case-insensitive exact match). */
+    @GetMapping("/by-email")
+    public ResponseEntity<List<TicketResponse>> getTicketsByEmail(@RequestParam("email") String email) {
+        String q = email == null ? "" : email.trim();
+        log.info("Fetch tickets by email request received: email='{}'", q);
+        List<TicketResponse> tickets = ticketRepository.findByEmailIgnoreCase(q)
+                .stream()
+                .map(TicketResponse::from)
+                .toList();
+        return ResponseEntity.ok(tickets);
+    }
+
     /**
      * Request payload for issuing tickets.
      *
@@ -307,7 +354,7 @@ public class TicketController {
      */
     public record TicketResponse(
             UUID ticketId,
-            String barcodeId,
+            String qrCodeId,
             String showId,
             String showName,
             String fullName,
@@ -317,7 +364,8 @@ public class TicketController {
             String transactionId,
             String status,
             Integer ticketCount,
-            String id, LocalDate createdAtDate,
+            String id,
+            LocalDate createdAtDate,
             String createdAtTimeIst,
             LocalDate usedAtDate,
             String usedAtTimeIst
@@ -328,7 +376,7 @@ public class TicketController {
         static TicketResponse from(Ticket t) {
             return new TicketResponse(
                     t.getTicketId(),
-                    t.getBarcodeId(),
+                    t.getQrCodeId(),
                     t.getShowId(),
                     t.getShowName(),
                     t.getFullName(),

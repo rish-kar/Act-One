@@ -15,9 +15,9 @@ import org.springframework.data.jpa.repository.Query;
 public interface TicketRepository extends JpaRepository<Ticket, UUID> {
 
     /**
-     * Lookup a ticket by its barcode id.
+     * Lookup a ticket by its QR code id.
      */
-    Optional<Ticket> findByBarcodeId(String barcodeId);
+    Optional<Ticket> findByQrCodeId(String qrCodeId);
 
     /**
      * Bulk update to set {@code showName} and {@code showId} for all records.
@@ -70,4 +70,13 @@ public interface TicketRepository extends JpaRepository<Ticket, UUID> {
     List<Ticket> findByPhoneNumber(String phoneNumber);
 
     List<Ticket> findByFullNameIgnoreCase(String fullName);
+
+    /** Find all tickets by email (case-insensitive). */
+    List<Ticket> findByEmailIgnoreCase(String email);
+
+    /** Find tickets where fullName contains the given string (case-insensitive). */
+    List<Ticket> findByFullNameContainingIgnoreCase(String fullName);
+
+    /** Find all tickets where phoneNumber contains the given digit sequence (case-insensitive). */
+    List<Ticket> findByPhoneNumberContainingIgnoreCase(String phoneDigits);
 }

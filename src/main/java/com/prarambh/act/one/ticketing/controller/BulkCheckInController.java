@@ -49,7 +49,7 @@ public class BulkCheckInController {
         int checkedIn = 0;
         for (Ticket t : tickets) {
             // Use existing check-in flow (side effects consistent).
-            ticketCheckInService.checkInByBarcode(t.getBarcodeId());
+            ticketCheckInService.checkInByBarcode(t.getQrCodeId());
             checkedIn++;
         }
 

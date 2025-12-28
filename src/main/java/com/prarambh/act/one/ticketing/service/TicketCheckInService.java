@@ -23,8 +23,8 @@ public class TicketCheckInService {
     private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
-    public Optional<Ticket> checkInByBarcode(String barcodeId) {
-        Optional<Ticket> ticketOpt = ticketRepository.findByBarcodeId(barcodeId);
+    public Optional<Ticket> checkInByBarcode(String qrCodeId) {
+        Optional<Ticket> ticketOpt = ticketRepository.findByQrCodeId(qrCodeId);
         if (ticketOpt.isEmpty()) {
             return Optional.empty();
         }
@@ -71,7 +71,7 @@ public class TicketCheckInService {
             }
         }
 
-        log.debug("event=ticket_checked_in_persisted ticketId={} barcodeId={}", saved.getTicketId(), barcodeId);
+        log.debug("event=ticket_checked_in_persisted ticketId={} qrCodeId={}", saved.getTicketId(), qrCodeId);
         return Optional.of(saved);
     }
 }

@@ -81,7 +81,7 @@ public class ManualTransactionService {
     /**
      * Moves all tickets of a customer from TRANSACTION_MADE -> ISSUED.
      *
-     * <p>This updates existing rows (keeps ticketId/barcodeId stable) then triggers the existing
+     * <p>This updates existing rows (keeps ticketId/qrCodeId stable) then triggers the existing
      * purchase-issued email/card generation by publishing {@link TicketPurchaseIssuedEvent}.
      */
     @Transactional
@@ -121,10 +121,10 @@ public class ManualTransactionService {
         int updated = 0;
         // Route through the check-in service so the purchase-level check-in email event is published.
         for (Ticket t : tickets) {
-            if (t.getBarcodeId() == null || t.getBarcodeId().isBlank()) {
+            if (t.getQrCodeId() == null || t.getQrCodeId().isBlank()) {
                 continue;
             }
-            Ticket saved = ticketCheckInService.checkInByBarcode(t.getBarcodeId()).orElse(null);
+            Ticket saved = ticketCheckInService.checkInByBarcode(t.getQrCodeId()).orElse(null);
             if (saved != null && saved.getStatus() == TicketStatus.USED) {
                 updated++;
             }

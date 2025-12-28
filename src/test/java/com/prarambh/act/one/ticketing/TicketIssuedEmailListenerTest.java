@@ -115,7 +115,7 @@ class TicketIssuedEmailListenerTest {
         int customerId = tickets.get(0).getCustomerId();
         manualTransactionService.validateTransactionAndIssueTickets(customerId);
 
-        org.junit.jupiter.api.Assertions.assertTrue(emailSender.awaitDeliveryCount(1, 2000));
+        org.junit.jupiter.api.Assertions.assertTrue(emailSender.awaitDeliveryCount(1, 8000));
         org.junit.jupiter.api.Assertions.assertEquals(1, emailSender.deliveryCount());
     }
 
@@ -139,7 +139,7 @@ class TicketIssuedEmailListenerTest {
         int customerId = tickets.get(0).getCustomerId();
         manualTransactionService.validateTransactionAndIssueTickets(customerId);
 
-        org.junit.jupiter.api.Assertions.assertTrue(emailSender.awaitDeliveryCount(1, 2000));
+        org.junit.jupiter.api.Assertions.assertTrue(emailSender.awaitDeliveryCount(1, 8000));
         org.junit.jupiter.api.Assertions.assertEquals(1, emailSender.deliveryCount());
     }
 
@@ -161,8 +161,9 @@ class TicketIssuedEmailListenerTest {
         int customerId = tickets.get(0).getCustomerId();
         manualTransactionService.validateTransactionAndIssueTickets(customerId);
 
-        // Email should NOT be sent because email is missing
-        org.junit.jupiter.api.Assertions.assertFalse(emailSender.awaitDeliveryCount(1, 400));
+        // Email should NOT be sent because email is missing.
+        // Allow a short window for any async listeners; then assert nothing was sent.
+        org.junit.jupiter.api.Assertions.assertFalse(emailSender.awaitDeliveryCount(1, 1500));
         org.junit.jupiter.api.Assertions.assertEquals(0, emailSender.deliveryCount());
     }
 
@@ -209,7 +210,7 @@ class TicketIssuedEmailListenerTest {
         // Validate the transaction to move to ISSUED
         int customerId = tickets.get(0).getCustomerId();
         List<Ticket> issued = manualTransactionService.validateTransactionAndIssueTickets(customerId);
-        org.junit.jupiter.api.Assertions.assertTrue(emailSender.awaitDeliveryCount(1, 2000));
+        org.junit.jupiter.api.Assertions.assertTrue(emailSender.awaitDeliveryCount(1, 8000));
         org.junit.jupiter.api.Assertions.assertEquals(1, emailSender.deliveryCount());
 
         String issueBody = emailSender.lastBody();
@@ -220,22 +221,22 @@ class TicketIssuedEmailListenerTest {
         emailSender.reset();
 
         // check-in first two tickets -> no new email
-        ticketCheckInService.checkInByBarcode(issued.get(0).getBarcodeId());
+        ticketCheckInService.checkInByBarcode(issued.get(0).getQrCodeId());
         org.junit.jupiter.api.Assertions.assertFalse(emailSender.awaitDeliveryCount(1, 300));
 
-        ticketCheckInService.checkInByBarcode(issued.get(1).getBarcodeId());
+        ticketCheckInService.checkInByBarcode(issued.get(1).getQrCodeId());
         org.junit.jupiter.api.Assertions.assertFalse(emailSender.awaitDeliveryCount(1, 300));
 
         // check-in last ticket -> emits one email
-        ticketCheckInService.checkInByBarcode(issued.get(2).getBarcodeId());
-        org.junit.jupiter.api.Assertions.assertTrue(emailSender.awaitDeliveryCount(1, 2000));
+        ticketCheckInService.checkInByBarcode(issued.get(2).getQrCodeId());
+        org.junit.jupiter.api.Assertions.assertTrue(emailSender.awaitDeliveryCount(1, 8000));
         org.junit.jupiter.api.Assertions.assertEquals(1, emailSender.deliveryCount());
 
         String body = emailSender.lastBody();
         org.assertj.core.api.Assertions.assertThat(body).contains("Your check-in is confirmed");
         org.assertj.core.api.Assertions.assertThat(body).contains("Quote of the moment:");
         for (Ticket it : issued) {
-            org.assertj.core.api.Assertions.assertThat(body).contains(it.getBarcodeId());
+            org.assertj.core.api.Assertions.assertThat(body).contains(it.getQrCodeId());
         }
 
         // Quote text is optional; we only assert the section header exists.

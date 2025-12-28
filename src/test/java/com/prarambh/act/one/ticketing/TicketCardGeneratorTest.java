@@ -41,8 +41,8 @@ class TicketCardGeneratorTest {
             t.setEmail("test@example.com");
             t.setPhoneNumber("+10000000000");
             t.setStatus(TicketStatus.ISSUED);
-            // Provide a sample 18-character barcodeId.
-            t.setBarcodeId("TEST12345678901234");
+            // Provide a sample 18-character qrCodeId.
+            t.setQrCodeId("TEST12345678901234");
 
             Path generated = ticketCardGenerator.generateTicketCardPng(t);
             Assertions.assertNotNull(generated);

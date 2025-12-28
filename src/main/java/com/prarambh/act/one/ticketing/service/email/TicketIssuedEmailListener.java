@@ -40,7 +40,7 @@ public class TicketIssuedEmailListener {
                 + "Your ticket has been issued." + "\n\n"
                 + "Show: " + nullToEmpty(t.getShowName()) + "\n"
                 + "Ticket ID: " + t.getTicketId() + "\n"
-                + "Barcode ID: " + nullToEmpty(t.getBarcodeId()) + "\n\n"
+                + "Barcode ID: " + nullToEmpty(t.getQrCodeId()) + "\n\n"
                 + "Thanks,\n"
                 + fromName + "\n";
     }
