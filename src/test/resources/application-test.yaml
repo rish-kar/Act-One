@@ -33,4 +33,4 @@ actone:
     bcc: ""
   ticket-card:
     enabled: true
-    templateResource: "classpath:/static/Card.jpeg"
+    templateResource: "classpath:/static/Card.png"

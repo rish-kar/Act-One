@@ -24,7 +24,7 @@ import lombok.extern.slf4j.Slf4j;
  * <ul>
  *   <li>All timestamps are captured in IST ({@code Asia/Kolkata}).</li>
  *   <li>Dates and times are stored as separate columns.</li>
- *   <li>{@code barcodeId} is a short identifier intended to be encoded as a barcode/QR code.</li>
+ *   <li>{@code qrCodeId} is a short identifier intended to be encoded as a QR code on the ticket.</li>
  * </ul>
  */
 @Entity
@@ -82,9 +82,9 @@ public class Ticket {
     @Column
     private LocalTime usedAtTime;
 
-    /** Short barcode identifier intended for barcode representation. Stored as exactly 18 characters. */
+    /** Short QR code identifier intended for QR representation. Stored as exactly 18 characters. */
     @Column(nullable = false, length = 18)
-    private String barcodeId;
+    private String qrCodeId;
 
     /**
      * Number of tickets purchased in the same purchase request.
@@ -203,16 +203,16 @@ public class Ticket {
         this.usedAtTime = usedAtTime;
     }
 
-    public String getBarcodeId() {
-        return barcodeId;
+    public String getQrCodeId() {
+        return qrCodeId;
     }
 
-    public void setBarcodeId(String barcodeId) {
-        if (barcodeId == null) {
-            this.barcodeId = null;
+    public void setQrCodeId(String qrCodeId) {
+        if (qrCodeId == null) {
+            this.qrCodeId = null;
             return;
         }
-        this.barcodeId = normalizeBarcodeId18(barcodeId);
+        this.qrCodeId = normalizeBarcodeId18(qrCodeId);
     }
 
     private static String normalizeBarcodeId18(String input) {
@@ -280,12 +280,12 @@ public class Ticket {
         if (ticketId == null) {
             ticketId = UUID.randomUUID();
         }
-        if (barcodeId == null || barcodeId.isBlank()) {
-            // Generate and store barcodeId as exactly 18 characters (hyphen-free).
-            barcodeId = UUID.randomUUID().toString().replace("-", "").substring(0, 18);
+        if (qrCodeId == null || qrCodeId.isBlank()) {
+            // Generate and store qrCodeId as exactly 18 characters (hyphen-free).
+            qrCodeId = UUID.randomUUID().toString().replace("-", "").substring(0, 18);
         } else {
-            // Ensure any externally provided barcodeId is normalized.
-            barcodeId = normalizeBarcodeId18(barcodeId);
+            // Ensure any externally provided qrCodeId is normalized.
+            qrCodeId = normalizeBarcodeId18(qrCodeId);
         }
 
         // Keep showId short and related to showName.
@@ -312,7 +312,7 @@ public class Ticket {
             ticketCount = 1;
         }
 
-        log.info("Ticket pre-persist initialized: ticketId={}, barcodeId={}, showId={}, showName='{}', status={}, ticketCount={}, createdAtDate={}, createdAtTime={} ",
-                ticketId, barcodeId, showId, showName, status, ticketCount, createdAtDate, createdAtTime);
+        log.info("Ticket pre-persist initialized: ticketId={}, qrCodeId={}, showId={}, showName='{}', status={}, ticketCount={}, createdAtDate={}, createdAtTime={} ",
+                ticketId, qrCodeId, showId, showName, status, ticketCount, createdAtDate, createdAtTime);
     }
 }

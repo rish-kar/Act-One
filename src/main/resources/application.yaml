@@ -76,7 +76,7 @@ actone:
   ticket-card:
     enabled: true
     outputDir: .
-    templateResource: "classpath:/static/Card.jpeg"
+    templateResource: "classpath:/static/Card.png"
 
 management:
   endpoints:

@@ -38,8 +38,15 @@ public final class ShowIdGenerator {
             return "";
         }
         // Strip accents and normalize unicode punctuation.
-        return Normalizer.normalize(s.trim(), Normalizer.Form.NFKD)
+        String n = Normalizer.normalize(s.trim(), Normalizer.Form.NFKD)
                 .replaceAll("\\p{M}", "");
+
+        // Treat common conjunction symbols as word separators so slugs combine words sensibly.
+        // Example: "Chorabali & Gobhir" -> "Chorabali and Gobhir" -> slug "CHORABALIGOBHIR".
+        n = n.replace("&", " and ")
+                .replace("+", " and ");
+
+        return n;
     }
 
     private static String toSlug(String s) {
@@ -68,4 +75,3 @@ public final class ShowIdGenerator {
         return base36.length() > 6 ? base36.substring(0, 6) : base36;
     }
 }
-

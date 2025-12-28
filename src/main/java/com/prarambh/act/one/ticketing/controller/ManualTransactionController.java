@@ -76,20 +76,29 @@ public class ManualTransactionController {
      */
     @GetMapping("/by-phone")
     public ResponseEntity<?> getByPhone(@RequestParam String phoneNumber) {
-        String last10 = normalizePhoneLast10(phoneNumber);
-        List<Ticket> tickets = ticketRepository.findByPhoneNumberEndingWith(last10);
+        String digits = normalizePhoneDigits(phoneNumber);
+        if (digits == null || digits.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "phoneNumber is required"));
+        }
+
+        // Partial search support:
+        // - if user enters <= 10 digits, match anywhere to support partial lookups
+        // - if user enters > 10 digits, match on last 10 (common use case)
+        List<Ticket> tickets;
+        if (digits.length() > 10) {
+            String last10 = digits.substring(digits.length() - 10);
+            tickets = ticketRepository.findByPhoneNumberEndingWith(last10);
+        } else {
+            tickets = ticketRepository.findByPhoneNumberContainingIgnoreCase(digits);
+        }
         return summarizeTickets(tickets);
     }
 
-    private static String normalizePhoneLast10(String input) {
+    private static String normalizePhoneDigits(String input) {
         if (input == null) {
             return null;
         }
-        String digits = input.replaceAll("\\D", "");
-        if (digits.length() <= 10) {
-            return digits;
-        }
-        return digits.substring(digits.length() - 10);
+        return input.replaceAll("\\D", "");
     }
 
     /**
@@ -97,7 +106,12 @@ public class ManualTransactionController {
      */
     @GetMapping("/by-name")
     public ResponseEntity<?> getByName(@RequestParam String fullName) {
-        List<Ticket> tickets = ticketRepository.findByFullNameIgnoreCase(fullName);
+        String q = fullName == null ? "" : fullName.trim();
+        if (q.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "fullName is required"));
+        }
+        // Partial search support (contains, case-insensitive)
+        List<Ticket> tickets = ticketRepository.findByFullNameContainingIgnoreCase(q);
         return summarizeTickets(tickets);
     }
 
@@ -114,6 +128,7 @@ public class ManualTransactionController {
         payload.put("ticketAmount", first.getTicketAmount() != null ? first.getTicketAmount().toPlainString() : null);
         payload.put("transactionId", first.getTransactionId());
         payload.put("ticketStatus", first.getStatus() != null ? first.getStatus().name() : null);
+        payload.put("ticketNumbers", tickets.stream().map(t -> t.getTicketId() != null ? t.getTicketId().toString() : null).toList());
         return ResponseEntity.ok(payload);
     }
 

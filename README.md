@@ -55,7 +55,7 @@ curl -X POST "http://localhost:8080/api/tickets/issue" \
 
 Response:
 - `ticketId` (UUID)
-- `barcodeId` (UUID) — random UUID meant to be encoded as a barcode later
+- `qrCodeId` (UUID) — random UUID meant to be encoded as a QR code for tickets
 - `status` (`ISSUED`)
 - `showId` (string, may be null but will be auto-generated when missing)
 - `showName`

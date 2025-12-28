@@ -67,7 +67,7 @@ public class TicketPurchaseEmailListener {
                     attachments.add(new EmailSender.EmailAttachment("ticket-" + t.getTicketId() + ".png", "image/png", pngPath));
                 }
             } catch (Exception e) {
-                log.error("event=ticket_card_generation_failed ticketId={} barcodeId={} error={}", t.getTicketId(), t.getBarcodeId(), e.toString());
+                log.error("event=ticket_card_generation_failed ticketId={} qrCodeId={} error={}", t.getTicketId(), t.getQrCodeId(), e.toString());
             }
         }
 
@@ -121,7 +121,7 @@ public class TicketPurchaseEmailListener {
         for (int i = 0; i < tickets.size(); i++) {
             Ticket t = tickets.get(i);
             sb.append(i + 1).append(") Ticket ID: ").append(t.getTicketId())
-                    .append(" | Barcode ID: ").append(nullToEmpty(t.getBarcodeId()))
+                    .append(" | QR code ID: ").append(nullToEmpty(t.getQrCodeId()))
                     .append("\n");
         }
 
@@ -160,7 +160,7 @@ public class TicketPurchaseEmailListener {
         for (int i = 0; i < tickets.size(); i++) {
             Ticket t = tickets.get(i);
             sb.append(i + 1).append(") Ticket ID: ").append(t.getTicketId())
-                    .append(" | Barcode ID: ").append(nullToEmpty(t.getBarcodeId()))
+                    .append(" | QR code ID: ").append(nullToEmpty(t.getQrCodeId()))
                     .append("\n");
         }
 
