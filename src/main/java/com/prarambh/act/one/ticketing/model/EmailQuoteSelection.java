@@ -9,13 +9,12 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * Stores which quote was selected for a given customerId and email type.
- * Ensures that ISSUE and CHECK_IN quotes can be different and stable across restarts.
+ * Stores which quote was selected for a given userId and email type.
  */
 @Entity
 @Table(
         name = "email_quote_selections",
-        uniqueConstraints = @UniqueConstraint(name = "uk_quote_customer_type", columnNames = {"customer_id", "email_type"})
+        uniqueConstraints = @UniqueConstraint(name = "uk_quote_user_type", columnNames = {"user_id", "email_type"})
 )
 @Getter
 @Setter
@@ -25,8 +24,8 @@ public class EmailQuoteSelection {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "customer_id", nullable = false)
-    private Integer customerId;
+    @Column(name = "user_id", nullable = false, length = 32)
+    private String userId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "email_type", nullable = false, length = 16)
@@ -54,4 +53,3 @@ public class EmailQuoteSelection {
         }
     }
 }
-

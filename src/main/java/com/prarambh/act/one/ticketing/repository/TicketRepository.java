@@ -46,26 +46,32 @@ public interface TicketRepository extends JpaRepository<Ticket, UUID> {
     @Query("select t from Ticket t where lower(cast(t.ticketId as string)) like concat('%', lower(:suffix))")
     List<Ticket> findByTicketIdSuffix(String suffix);
 
-    /** True if any ticket row exists for the given customerId. */
-    boolean existsByCustomerId(Integer customerId);
+    /** True if any ticket row exists for the given userId. */
+    boolean existsByUserId(String userId);
 
-    /** Find tickets by customerId and status. */
-    List<Ticket> findByCustomerIdAndStatus(Integer customerId, TicketStatus status);
+    @Query("SELECT DISTINCT t.showName, t.showId FROM Ticket t WHERE t.showName IS NOT NULL")
+    List<Object[]> findDistinctShows();
 
-    /** Find all tickets by customerId. */
-    List<Ticket> findByCustomerId(Integer customerId);
+    /** Find tickets by userId and status. */
+    List<Ticket> findByUserIdAndStatus(String userId, TicketStatus status);
+
+    /** Find all tickets by userId. */
+    List<Ticket> findByUserId(String userId);
 
     /**
-     * Returns distinct customerIds that have at least one ticket row with the given status.
+     * Returns distinct userIds that have at least one ticket row with the given status.
      */
-    @Query("select distinct t.customerId from Ticket t where t.customerId is not null and t.status = :status")
-    List<Integer> findDistinctCustomerIdsByStatus(TicketStatus status);
+    @Query("select distinct t.userId from Ticket t where t.userId is not null and t.status = :status")
+    List<String> findDistinctUserIdsByStatus(TicketStatus status);
 
-    /** Latest ticket for a customer in TRANSACTION_MADE status */
-    Ticket findFirstByCustomerIdAndStatusOrderByCreatedAtDateDescCreatedAtTimeDesc(Integer customerId, TicketStatus status);
+    /** Latest ticket for a user in TRANSACTION_MADE status */
+    Ticket findFirstByUserIdAndStatusOrderByCreatedAtDateDescCreatedAtTimeDesc(String userId, TicketStatus status);
 
     /** Find first ticket by transactionId */
     Optional<Ticket> findFirstByTransactionId(String transactionId);
+
+    /** Find all tickets with the given transactionId */
+    List<Ticket> findByTransactionId(String transactionId);
 
     List<Ticket> findByPhoneNumber(String phoneNumber);
 

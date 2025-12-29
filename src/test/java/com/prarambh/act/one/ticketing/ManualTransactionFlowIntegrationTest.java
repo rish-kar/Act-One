@@ -49,13 +49,13 @@ class ManualTransactionFlowIntegrationTest {
                 .getResponseBody();
 
         assertThat(record).isNotNull();
-        assertThat(record.get("customerId")).isNotNull();
+        assertThat(record.get("userId")).isNotNull();
         assertThat(record.get("ticketCount")).isEqualTo(2);
         assertThat(record.get("status")).isEqualTo("TRANSACTION_MADE");
 
-        int customerId = ((Number) record.get("customerId")).intValue();
+        String userId = record.get("userId").toString();
 
-        // 2) list successful transactions includes this customerId
+        // 2) list successful transactions includes this userId
         List<Map> list = webTestClient.get()
                 .uri("/api/transactions/successful")
                 .header("X-Admin-Password", "prarambh-admin-delhi")
@@ -66,11 +66,11 @@ class ManualTransactionFlowIntegrationTest {
                 .getResponseBody();
 
         assertThat(list).isNotNull();
-        assertThat(list.stream().anyMatch(m -> ((Number) m.get("customerId")).intValue() == customerId)).isTrue();
+        assertThat(list.stream().anyMatch(m -> userId.equals(String.valueOf(m.get("userId"))))).isTrue();
 
         // 3) validate -> issued
         Map validate1 = webTestClient.post()
-                .uri("/api/transactions/{customerId}/validate", customerId)
+                .uri("/api/transactions/{userId}/validate", userId)
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(Map.class)
@@ -82,7 +82,7 @@ class ManualTransactionFlowIntegrationTest {
         assertThat(validate1.get("ticketStatus")).isEqualTo("ISSUED");
 
         Map validate2 = webTestClient.post()
-                .uri("/api/transactions/{customerId}/validate", customerId)
+                .uri("/api/transactions/{userId}/validate", userId)
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(Map.class)
@@ -93,7 +93,7 @@ class ManualTransactionFlowIntegrationTest {
         assertThat(((Number) validate2.get("ticketCount")).intValue()).isEqualTo(2);
         assertThat(validate2.get("ticketStatus")).isEqualTo("ISSUED");
 
-        // sanity: tickets listing shows those tickets now ISSUED and has customerId/transactionId
+        // sanity: tickets listing shows those tickets now ISSUED and has userId/transactionId
         webTestClient.get()
                 .uri("/api/tickets/all")
                 .exchange()
@@ -101,12 +101,12 @@ class ManualTransactionFlowIntegrationTest {
                 .expectBodyList(Map.class)
                 .value(all -> {
                     long mine = all.stream()
-                            .filter(m -> m.get("customerId") != null && ((Number) m.get("customerId")).intValue() == customerId)
+                            .filter(m -> m.get("userId") != null && userId.equals(String.valueOf(m.get("userId"))))
                             .count();
                     assertThat(mine).isEqualTo(2);
 
                     all.stream()
-                            .filter(m -> m.get("customerId") != null && ((Number) m.get("customerId")).intValue() == customerId)
+                            .filter(m -> m.get("userId") != null && userId.equals(String.valueOf(m.get("userId"))))
                             .forEach(m -> {
                                 assertThat(m.get("transactionId")).isEqualTo("UPI_TXN_123");
                                 assertThat(m.get("status")).isEqualTo("ISSUED");

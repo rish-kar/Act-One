@@ -12,6 +12,8 @@ import jakarta.validation.constraints.NotBlank;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -43,6 +45,22 @@ public class TicketController {
     private final ShowSettingsService showSettingsService;
     private final TicketIssuanceService ticketIssuanceService;
     private final TicketCheckInService ticketCheckInService;
+
+    /**
+     * Fetch distinct shows from the tickets table.
+     */
+    @GetMapping("/shows")
+    public ResponseEntity<?> getShowsFromTickets() {
+        List<Object[]> results = ticketRepository.findDistinctShows();
+        List<Map<String, String>> shows = new ArrayList<>();
+        for (Object[] row : results) {
+            Map<String, String> map = new LinkedHashMap<>();
+            map.put("showName", (String) row[0]);
+            map.put("showId", (String) row[1]);
+            shows.add(map);
+        }
+        return ResponseEntity.ok(shows);
+    }
 
     /**
      * Issue a ticket.
@@ -83,14 +101,14 @@ public class TicketController {
         Ticket primary = savedTickets.get(0);
 
         log.info(
-                "event=ticket_recorded ticketId={} qrCodeId={} showId={} showName={} status={} ticketCount={} customerId={}",
+                "event=ticket_recorded ticketId={} qrCodeId={} showId={} showName={} status={} ticketCount={} userId={}",
                 primary.getTicketId(),
                 primary.getQrCodeId(),
                 primary.getShowId(),
                 primary.getShowName(),
                 primary.getStatus(),
                 primary.getTicketCount(),
-                primary.getCustomerId());
+                primary.getUserId());
 
         Map<String, Object> response = new java.util.LinkedHashMap<>();
         response.put("ticketId", primary.getTicketId());
@@ -99,7 +117,7 @@ public class TicketController {
         response.put("showId", primary.getShowId());
         response.put("showName", primary.getShowName());
         response.put("ticketCount", primary.getTicketCount());
-        response.put("customerId", primary.getCustomerId());
+        response.put("userId", primary.getUserId());
         response.put("transactionId", primary.getTransactionId());
         response.put("ticketIds", savedTickets.stream().map(Ticket::getTicketId).collect(Collectors.toList()));
         response.put("qrCodeIds", savedTickets.stream().map(Ticket::getQrCodeId).collect(Collectors.toList()));
@@ -139,12 +157,12 @@ public class TicketController {
         }
 
         if (ticket.getStatus() == TicketStatus.TRANSACTION_MADE) {
-            log.warn("Check-in PENDING_APPROVAL: qrCodeId={}, ticketId={}, customerId={}",
-                    qrCodeId, ticket.getTicketId(), ticket.getCustomerId());
+            log.warn("Check-in PENDING_APPROVAL: qrCodeId={}, ticketId={}, userId={}",
+                    qrCodeId, ticket.getTicketId(), ticket.getUserId());
             return ResponseEntity.ok(Map.of(
                     "result", "PENDING_APPROVAL",
                     "message", "Ticket not yet approved. Please contact admin.",
-                    "customerId", ticket.getCustomerId() != null ? ticket.getCustomerId() : 0
+                    "userId", ticket.getUserId() != null ? ticket.getUserId() : ""
             ));
         }
 
@@ -223,11 +241,11 @@ public class TicketController {
         }
 
         if (ticket.getStatus() == TicketStatus.TRANSACTION_MADE) {
-            log.warn("Check-in PENDING_APPROVAL: ticketId={}, customerId={}", ticketId, ticket.getCustomerId());
+            log.warn("Check-in PENDING_APPROVAL: ticketId={}, userId={}", ticketId, ticket.getUserId());
             return ResponseEntity.ok(Map.of(
                     "result", "PENDING_APPROVAL",
                     "message", "Ticket not yet approved. Please contact admin.",
-                    "customerId", ticket.getCustomerId() != null ? ticket.getCustomerId() : 0
+                    "userId", ticket.getUserId() != null ? ticket.getUserId() : ""
             ));
         }
 
@@ -286,11 +304,11 @@ public class TicketController {
                 });
     }
 
-    /** Fetch all tickets for a given customerId. */
-    @GetMapping("/by-customer")
-    public ResponseEntity<List<TicketResponse>> getTicketsByCustomerId(@RequestParam("customerId") Integer customerId) {
-        log.info("Fetch tickets by customerId request received: customerId={}", customerId);
-        List<TicketResponse> tickets = ticketRepository.findByCustomerId(customerId)
+    /** Fetch all tickets for a given userId. */
+    @GetMapping("/by-user")
+    public ResponseEntity<List<TicketResponse>> getTicketsByUserId(@RequestParam("userId") String userId) {
+        log.info("Fetch tickets by userId request received: userId={}", userId);
+        List<TicketResponse> tickets = ticketRepository.findByUserId(userId)
                 .stream()
                 .map(TicketResponse::from)
                 .toList();
@@ -360,7 +378,7 @@ public class TicketController {
             String fullName,
             String email,
             String phoneNumber,
-            Integer customerId,
+            String userId,
             String transactionId,
             String status,
             Integer ticketCount,
@@ -382,7 +400,7 @@ public class TicketController {
                     t.getFullName(),
                     t.getEmail(),
                     t.getPhoneNumber(),
-                    t.getCustomerId(),
+                    t.getUserId(),
                     t.getTransactionId(),
                     t.getStatus() != null ? t.getStatus().name() : null,
                     t.getTicketCount(),
@@ -391,8 +409,8 @@ public class TicketController {
                     formatIstTime(t.getCreatedAtTime()),
                     t.getUsedAtDate(),
                     formatIstTime(t.getUsedAtTime())
-            );
-        }
+             );
+         }
 
         /**
          * Formats a time in 12-hour form for API readability.

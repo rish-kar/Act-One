@@ -4,6 +4,8 @@ import com.prarambh.act.one.ticketing.model.Ticket;
 import com.prarambh.act.one.ticketing.model.TicketStatus;
 import com.prarambh.act.one.ticketing.repository.TicketRepository;
 import com.prarambh.act.one.ticketing.service.ManualTransactionService;
+import com.prarambh.act.one.ticketing.service.TicketIssuanceService;
+import com.prarambh.act.one.ticketing.service.TicketCheckInService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -31,6 +33,8 @@ public class ManualTransactionController {
 
     private final ManualTransactionService manualTransactionService;
     private final TicketRepository ticketRepository;
+    private final TicketIssuanceService ticketIssuanceService;
+    private final TicketCheckInService ticketCheckInService;
 
     @Value("${actone.admin.purge-password:}")
     private String adminPassword;
@@ -44,24 +48,37 @@ public class ManualTransactionController {
     public ResponseEntity<?> recordTransaction(@Valid @RequestBody RecordTransactionRequest req) {
         ManualTransactionService.ManualTransactionResult result = manualTransactionService.recordTransaction(req);
         return ResponseEntity.ok(Map.of(
-                "customerId", result.customerId(),
+                "userId", result.userId(),
                 "ticketCount", result.ticketCount(),
                 "status", TicketStatus.TRANSACTION_MADE.name()
         ));
     }
 
     /**
+     * Record a cash transaction that will be paid later (manual verification/pending payment).
+     */
+    @PostMapping("/record-pending")
+    public ResponseEntity<?> recordPendingTransaction(@Valid @RequestBody RecordTransactionRequest req) {
+        ManualTransactionService.ManualTransactionResult result = manualTransactionService.recordPendingTransaction(req);
+        return ResponseEntity.ok(Map.of(
+                "userId", result.userId(),
+                "ticketCount", result.ticketCount(),
+                "status", TicketStatus.TRANSACTION_PENDING.name()
+        ));
+    }
+
+    /**
      * Admin endpoint: validate transaction and issue tickets for a customer.
      */
-    @PostMapping("/{customerId}/validate")
-    public ResponseEntity<?> validateAndIssue(@PathVariable int customerId) {
-        List<Ticket> issued = manualTransactionService.validateTransactionAndIssueTickets(customerId);
+    @PostMapping("/{userId}/validate")
+    public ResponseEntity<?> validateAndIssue(@PathVariable String userId) {
+        List<Ticket> issued = manualTransactionService.validateTransactionAndIssueTickets(userId);
         if (issued.isEmpty()) {
-            return ResponseEntity.status(404).body(Map.of("message", "Customer not found", "customerId", customerId));
+            return ResponseEntity.status(404).body(Map.of("message", "User not found", "userId", userId));
         }
         Ticket first = issued.get(0);
         return ResponseEntity.ok(Map.of(
-                "customerId", customerId,
+                "userId", userId,
                 "fullName", first.getFullName(),
                 "phoneNumber", first.getPhoneNumber(),
                 "ticketCount", issued.size(),
@@ -121,7 +138,7 @@ public class ManualTransactionController {
         }
         Ticket first = tickets.get(0);
         Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("customerId", first.getCustomerId());
+        payload.put("userId", first.getUserId());
         payload.put("fullName", first.getFullName());
         payload.put("phoneNumber", first.getPhoneNumber());
         payload.put("ticketCount", tickets.size());
@@ -135,15 +152,15 @@ public class ManualTransactionController {
     /**
      * Admin endpoint: issue tickets by customer ID.
      */
-    @PostMapping("/{customerId}/issue")
-    public ResponseEntity<?> issueByCustomerId(@PathVariable int customerId) {
-        List<Ticket> issued = manualTransactionService.validateTransactionAndIssueTickets(customerId);
+    @PostMapping("/{userId}/issue")
+    public ResponseEntity<?> issueByUserId(@PathVariable String userId) {
+        List<Ticket> issued = manualTransactionService.validateTransactionAndIssueTickets(userId);
         if (issued.isEmpty()) {
-            return ResponseEntity.status(404).body(Map.of("message", "Customer not found", "customerId", customerId));
+            return ResponseEntity.status(404).body(Map.of("message", "User not found", "userId", userId));
         }
         return ResponseEntity.ok(Map.of(
                 "message", "Ticket is confirmed",
-                "customerId", customerId,
+                "userId", userId,
                 "issuedCount", issued.size()
         ));
     }
@@ -151,17 +168,129 @@ public class ManualTransactionController {
     /**
      * Admin endpoint: check-in by customer ID.
      */
-    @PostMapping("/{customerId}/checkin")
-    public ResponseEntity<?> checkInByCustomerId(@PathVariable int customerId) {
-        int used = manualTransactionService.checkInByCustomerId(customerId);
+    @PostMapping("/{userId}/checkin")
+    public ResponseEntity<?> checkInByUserId(@PathVariable String userId) {
+        int used = manualTransactionService.checkInByUserId(userId);
         if (used == 0) {
-            return ResponseEntity.status(404).body(Map.of("message", "Customer not found", "customerId", customerId));
+            return ResponseEntity.status(404).body(Map.of("message", "User not found", "userId", userId));
         }
         return ResponseEntity.ok(Map.of(
                 "message", "Check-in successful",
-                "customerId", customerId,
+                "userId", userId,
                 "usedCount", used
         ));
+    }
+
+    /**
+     * Admin endpoint: validate transaction and issue tickets by transaction ID.
+     */
+    @PostMapping("/by-transaction/{transactionId}/validate")
+    public ResponseEntity<?> validateAndIssueByTransaction(
+            @PathVariable String transactionId,
+            @RequestHeader(value = "X-Admin-Password", required = false) String headerPassword
+    ) {
+        if (!isAdminPasswordValid(headerPassword)) return ResponseEntity.status(403).body(Map.of("message","Invalid admin password"));
+
+        try {
+            List<Ticket> issued = manualTransactionService.validateTransactionAndIssueTicketsByTransactionId(transactionId);
+            return ResponseEntity.ok(Map.of("transactionId", transactionId, "issuedCount", issued.size()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(404).body(Map.of("message", e.getMessage(), "transactionId", transactionId));
+        }
+    }
+
+    /**
+     * Admin endpoint: check-in by transaction ID. This will mark all tickets with the given
+     * transactionId as USED (if they are ISSUED).
+     */
+    @PostMapping("/by-transaction/{transactionId}/checkin")
+    public ResponseEntity<?> checkInByTransaction(
+            @PathVariable String transactionId,
+            @RequestHeader(value = "X-Admin-Password", required = false) String headerPassword
+    ) {
+        if (!isAdminPasswordValid(headerPassword)) return ResponseEntity.status(403).body(Map.of("message","Invalid admin password"));
+
+        try {
+            int checkedIn = manualTransactionService.checkInByTransactionId(transactionId);
+            if (checkedIn == 0) {
+                return ResponseEntity.status(404).body(Map.of("message", "Transaction not found", "transactionId", transactionId));
+            }
+            return ResponseEntity.ok(Map.of("transactionId", transactionId, "checkedInCount", checkedIn));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    /**
+     * Retrieve transaction (grouped by transactionId) details for a given transactionId.
+     * Returns user details + transaction rows grouped by transactionId. Admin header required.
+     */
+    @GetMapping("/by-transaction/{transactionId}")
+    public ResponseEntity<?> getTransactionDetailsByTransactionId(@PathVariable String transactionId,
+                                                                   @RequestHeader(value = "X-Admin-Password", required = false) String headerPassword) {
+        if (!isAdminPasswordValid(headerPassword)) return ResponseEntity.status(403).body(Map.of("message","Invalid admin password"));
+
+        List<Ticket> tickets = ticketRepository.findByTransactionId(transactionId);
+        if (tickets == null || tickets.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("message","Transaction not found","transactionId", transactionId));
+        }
+
+        Ticket first = tickets.get(0);
+        Map<String, Object> m = new java.util.LinkedHashMap<>();
+        m.put("transactionId", transactionId);
+        m.put("userId", first.getUserId());
+        m.put("fullName", first.getFullName());
+        m.put("phoneNumber", first.getPhoneNumber());
+        m.put("email", first.getEmail());
+        m.put("ticketAmount", first.getTicketAmount() != null ? first.getTicketAmount().toPlainString() : null);
+        m.put("ticketStatus", first.getStatus() != null ? first.getStatus().name() : null);
+        m.put("ticketCount", tickets.size());
+        m.put("ticketIds", tickets.stream().map(t->t.getTicketId().toString()).toList());
+
+        return ResponseEntity.ok(m);
+    }
+
+    /**
+     * Retrieve all transactions for a specific userId.
+     * Groups tickets by transactionId and returns an array of transaction objects.
+     */
+    @GetMapping("/{userId}/transactions")
+    public ResponseEntity<?> getTransactionsByUserId(@PathVariable String userId,
+                                                     @RequestHeader(value = "X-Admin-Password", required = false) String headerPassword) {
+        if (!isAdminPasswordValid(headerPassword)) return ResponseEntity.status(403).body(Map.of("message","Invalid admin password"));
+
+        List<Ticket> tickets = ticketRepository.findByUserId(userId);
+        if (tickets == null || tickets.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("message","No tickets found for userId","userId", userId));
+        }
+
+        // Group tickets by transactionId (null transactionId kept as string "<none>")
+        Map<String, List<Ticket>> grouped = tickets.stream()
+                .collect(java.util.stream.Collectors.groupingBy(t -> t.getTransactionId() == null ? "<none>" : t.getTransactionId()));
+
+        List<Map<String,Object>> out = new ArrayList<>();
+        for (Map.Entry<String, List<Ticket>> e : grouped.entrySet()){
+            String txnId = e.getKey();
+            List<Ticket> tks = e.getValue();
+            Ticket first = tks.get(0);
+            Map<String,Object> entry = new LinkedHashMap<>();
+            entry.put("transactionId", txnId.equals("<none>") ? null : txnId);
+            entry.put("ticketCount", tks.size());
+            entry.put("ticketAmount", first.getTicketAmount() != null ? first.getTicketAmount().toPlainString() : null);
+            entry.put("ticketStatus", first.getStatus() != null ? first.getStatus().name() : null);
+            entry.put("ticketIds", tks.stream().map(t->t.getTicketId().toString()).toList());
+            out.add(entry);
+        }
+
+        Map<String,Object> resp = new LinkedHashMap<>();
+        Ticket first = tickets.get(0);
+        resp.put("userId", userId);
+        resp.put("fullName", first.getFullName());
+        resp.put("phoneNumber", first.getPhoneNumber());
+        resp.put("email", first.getEmail());
+        resp.put("transactions", out);
+
+        return ResponseEntity.ok(resp);
     }
 
     private boolean isAdminPasswordValid(String headerPassword) {
@@ -176,25 +305,31 @@ public class ManualTransactionController {
             return ResponseEntity.status(403).body(Map.of("message", "Invalid admin password"));
         }
 
-        List<Integer> customerIds = ticketRepository.findDistinctCustomerIdsByStatus(TicketStatus.TRANSACTION_MADE);
-        List<Map<String, Object>> customers = new ArrayList<>();
-        for (Integer customerId : customerIds) {
-            List<Ticket> tickets = ticketRepository.findByCustomerIdAndStatus(customerId, TicketStatus.TRANSACTION_MADE);
-            if (tickets.isEmpty()) {
+        List<String> userIds = ticketRepository.findDistinctUserIdsByStatus(TicketStatus.TRANSACTION_MADE);
+        List<Map<String, Object>> out = new ArrayList<>();
+
+        for (String userId : userIds) {
+            if (userId == null || userId.isBlank()) {
+                continue;
+            }
+            List<Ticket> tickets = ticketRepository.findByUserIdAndStatus(userId, TicketStatus.TRANSACTION_MADE);
+            if (tickets == null || tickets.isEmpty()) {
                 continue;
             }
             Ticket first = tickets.get(0);
-            Map<String, Object> entry = new LinkedHashMap<>();
-            entry.put("customerId", customerId);
-            entry.put("fullName", first.getFullName());
-            entry.put("phoneNumber", first.getPhoneNumber());
-            entry.put("ticketCount", tickets.size());
-            entry.put("ticketAmount", first.getTicketAmount() != null ? first.getTicketAmount().toPlainString() : null);
-            entry.put("transactionId", first.getTransactionId());
-            entry.put("ticketStatus", TicketStatus.TRANSACTION_MADE.name());
-            customers.add(entry);
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("userId", userId);
+            m.put("fullName", first.getFullName());
+            m.put("phoneNumber", first.getPhoneNumber());
+            m.put("ticketCount", tickets.size());
+            m.put("ticketAmount", first.getTicketAmount());
+            m.put("transactionId", first.getTransactionId());
+            m.put("ticketStatus", first.getStatus() != null ? first.getStatus().name() : null);
+            m.put("ticketNumbers", tickets.stream().map(t -> t.getTicketId() != null ? t.getTicketId().toString() : null).toList());
+            out.add(m);
         }
-        return ResponseEntity.ok(customers);
+
+        return ResponseEntity.ok(out);
     }
 
     public record RecordTransactionRequest(
