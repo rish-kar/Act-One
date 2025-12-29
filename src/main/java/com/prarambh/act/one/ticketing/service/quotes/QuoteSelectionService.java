@@ -12,8 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Picks a random theatre quote for an email and persists it per customerId.
- * Ensures that for the same customerId, ISSUE and CHECK_IN quotes are different.
+ * Picks a random theatre quote for an email and persists it per userId.
  */
 @Service
 @RequiredArgsConstructor
@@ -26,37 +25,37 @@ public class QuoteSelectionService {
     private final SecureRandom random = new SecureRandom();
 
     @Transactional
-    public TheatreQuote quoteForCustomer(Integer customerId, EmailQuoteType type) {
+    public TheatreQuote quoteForUser(String userId, EmailQuoteType type) {
         List<TheatreQuote> quotes = catalog.getQuotes();
         if (quotes == null || quotes.isEmpty()) {
             return new TheatreQuote("quotes.none", "", "");
         }
 
-        // If no customerId, best effort random (can't guarantee cross-email uniqueness).
-        if (customerId == null) {
+        // If no userId, best effort random (can't guarantee cross-email uniqueness).
+        if (userId == null) {
             return quotes.get(random.nextInt(quotes.size()));
         }
 
-        Optional<EmailQuoteSelection> existing = selectionRepository.findByCustomerIdAndEmailType(customerId, type);
+        Optional<EmailQuoteSelection> existing = selectionRepository.findByUserIdAndEmailType(userId, type);
         if (existing.isPresent()) {
             return findByKeyOrFallback(existing.get().getQuoteKey(), quotes);
         }
 
         // To enforce "issue != check-in" pick, avoid the other type's already selected quote (if any).
         EmailQuoteType otherType = (type == EmailQuoteType.ISSUE) ? EmailQuoteType.CHECK_IN : EmailQuoteType.ISSUE;
-        String avoidKey = selectionRepository.findByCustomerIdAndEmailType(customerId, otherType)
+        String avoidKey = selectionRepository.findByUserIdAndEmailType(userId, otherType)
                 .map(EmailQuoteSelection::getQuoteKey)
                 .orElse(null);
 
         TheatreQuote chosen = pickRandomAvoiding(quotes, avoidKey);
 
         EmailQuoteSelection sel = new EmailQuoteSelection();
-        sel.setCustomerId(customerId);
+        sel.setUserId(userId);
         sel.setEmailType(type);
         sel.setQuoteKey(chosen.key());
         selectionRepository.save(sel);
 
-        log.debug("event=email_quote_selected customerId={} emailType={} quoteKey={} avoidedKey={}", customerId, type, chosen.key(), avoidKey);
+        log.debug("event=email_quote_selected userId={} emailType={} quoteKey={} avoidedKey={}", userId, type, chosen.key(), avoidKey);
         return chosen;
     }
 

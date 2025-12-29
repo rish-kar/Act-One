@@ -46,7 +46,7 @@ class TicketControllerIntegrationTest {
         assertThat(body.get("showId")).isNotNull();
         assertThat(body.get("showName")).isEqualTo("Test Show");
         assertThat(body.get("showId").toString()).contains("SHOW-");
-        assertThat(body.get("customerId")).isNotNull();
+        assertThat(body.get("userId")).isNotNull();
         assertThat(body.get("transactionId")).isNotNull();
         assertThat(body.get("message")).isEqualTo("Transaction recorded. Tickets will be issued after manual approval.");
 
@@ -125,11 +125,12 @@ class TicketControllerIntegrationTest {
 
         assertThat(issueBody).isNotNull();
         String qrCodeId = issueBody.get("qrCodeId").toString();
-        int customerId = ((Number) issueBody.get("customerId")).intValue();
+        // userId is a short UUID string in the current model
+        String userId = issueBody.get("userId").toString();
 
         // First, validate the transaction to move tickets to ISSUED status
         webTestClient.post()
-                .uri("/api/transactions/{customerId}/validate", customerId)
+                .uri("/api/transactions/{userId}/validate", userId)
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(Map.class)
@@ -415,10 +416,10 @@ class TicketControllerIntegrationTest {
                 .getResponseBody();
 
         assertThat(issueBody).isNotNull();
-        int customerId = ((Number) issueBody.get("customerId")).intValue();
+        String userId = String.valueOf(issueBody.get("userId"));
 
         byte[] zipBytes = webTestClient.get()
-                .uri("/api/ticket-cards/by-customer/{customerId}", customerId)
+                .uri("/api/ticket-cards/by-user/{userId}", userId)
                 .exchange()
                 .expectStatus().isOk()
                 .expectHeader().contentType("application/zip")

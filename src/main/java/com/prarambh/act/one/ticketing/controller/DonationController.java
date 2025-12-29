@@ -2,69 +2,51 @@ package com.prarambh.act.one.ticketing.controller;
 
 import com.prarambh.act.one.ticketing.model.Donation;
 import com.prarambh.act.one.ticketing.service.DonationService;
-import java.net.URI;
 import java.util.List;
+import java.util.Optional;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 @RestController
-@RequestMapping("/api/donations")
 public class DonationController {
 
-    private final DonationService donationService;
+    private final DonationService service;
+    private final String adminPassword = System.getenv().getOrDefault("ADMIN_PASSWORD","prarambh-admin-delhi");
 
-    public DonationController(DonationService donationService) {
-        this.donationService = donationService;
-    }
+    public DonationController(DonationService service) { this.service = service; }
 
-    @PostMapping
-    public ResponseEntity<?> create(@RequestBody Donation donation) {
-        try {
-            Donation saved = donationService.createDonation(donation);
-            URI uri = ServletUriComponentsBuilder.fromCurrentRequest().path("/{id}").buildAndExpand(saved.getId()).toUri();
-            return ResponseEntity.created(uri).body(saved);
-        } catch (IllegalArgumentException e) {
+    @PostMapping("/api/donations")
+    public ResponseEntity<?> create(@RequestBody Donation d){
+        try{
+            Donation saved = service.create(d);
+            return ResponseEntity.status(HttpStatus.CREATED).body(saved);
+        }catch(IllegalArgumentException e){
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
 
-    @GetMapping
-    public List<Donation> listAll() {
-        return donationService.listAll();
+    @GetMapping("/api/donations")
+    public List<Donation> list(){ return service.listAll(); }
+
+    @GetMapping("/api/donations/{serial}")
+    public ResponseEntity<?> getBySerial(@PathVariable String serial){
+        Optional<Donation> d = service.findBySerial(serial);
+        return d.<ResponseEntity<?>>map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    @GetMapping("/{id}")
-    public ResponseEntity<?> getById(@PathVariable Long id) {
-        return donationService.findById(id).map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
-    }
-
-    @GetMapping("/by-phone")
-    public List<Donation> byPhone(@RequestParam String phoneNumber) {
-        return donationService.findByPhone(phoneNumber);
-    }
-
-    @GetMapping("/by-email")
-    public List<Donation> byEmail(@RequestParam String email) {
-        return donationService.findByEmail(email);
-    }
-
-    @GetMapping("/by-name")
-    public List<Donation> byName(@RequestParam String fullName) {
-        return donationService.findByFullName(fullName);
-    }
-
-    @DeleteMapping("/{id}")
-    public ResponseEntity<?> delete(@PathVariable Long id) {
-        donationService.deleteById(id);
-        return ResponseEntity.noContent().build();
+    @DeleteMapping("/api/donations/{id}")
+    public ResponseEntity<?> delete(@PathVariable Long id, @RequestHeader(name = "X-Admin-Password", required = false) String pass){
+        if (!StringUtils.hasText(pass) || !pass.equals(adminPassword)) return ResponseEntity.status(HttpStatus.FORBIDDEN).body("admin password required");
+        service.deleteById(id);
+        return ResponseEntity.ok().build();
     }
 }
 

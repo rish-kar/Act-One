@@ -103,7 +103,7 @@ public class TicketPurchaseEmailListener {
     private String buildIssuedBody(List<Ticket> tickets) {
         Ticket first = tickets.get(0);
 
-        TheatreQuote quote = quoteSelectionService.quoteForCustomer(first.getCustomerId(), EmailQuoteType.ISSUE);
+        TheatreQuote quote = quoteSelectionService.quoteForUser(first.getUserId(), EmailQuoteType.ISSUE);
 
         StringBuilder sb = new StringBuilder();
         sb.append("Hello ").append(nullToEmpty(first.getFullName())).append(",\n\n")
@@ -141,7 +141,7 @@ public class TicketPurchaseEmailListener {
     private String buildCheckedInBody(List<Ticket> tickets) {
         Ticket first = tickets.get(0);
 
-        TheatreQuote quote = quoteSelectionService.quoteForCustomer(first.getCustomerId(), EmailQuoteType.CHECK_IN);
+        TheatreQuote quote = quoteSelectionService.quoteForUser(first.getUserId(), EmailQuoteType.CHECK_IN);
 
         String usedAtDate = first.getUsedAtDate() != null ? first.getUsedAtDate().toString() : "";
         String usedAtTime = first.getUsedAtTime() != null ? first.getUsedAtTime().format(IST_12H_TIME) : "";

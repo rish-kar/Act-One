@@ -7,15 +7,14 @@ import com.prarambh.act.one.ticketing.repository.TicketRepository;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Implements the manual payment verification flow:
- * 1) Record a transaction (create ticket rows in TRANSACTION_MADE)
- * 2) Admin validates the transaction and moves tickets to ISSUED (and triggers email/card generation)
+ * Implements the manual payment verification flow.
  */
 @Service
 @RequiredArgsConstructor
@@ -23,24 +22,36 @@ import org.springframework.transaction.annotation.Transactional;
 public class ManualTransactionService {
 
     private final TicketRepository ticketRepository;
-    private final CustomerIdService customerIdService;
     private final TicketIssuanceService ticketIssuanceService;
     private final TicketCheckInService ticketCheckInService;
 
     @Transactional
     public ManualTransactionResult recordTransaction(ManualTransactionController.RecordTransactionRequest req) {
+        return recordTransactionInternal(req, TicketStatus.TRANSACTION_MADE);
+    }
+
+    @Transactional
+    public ManualTransactionResult recordPendingTransaction(ManualTransactionController.RecordTransactionRequest req) {
+        return recordTransactionInternal(req, TicketStatus.TRANSACTION_PENDING);
+    }
+
+    private ManualTransactionResult recordTransactionInternal(ManualTransactionController.RecordTransactionRequest req, TicketStatus status) {
         if (req.effectiveTicketCount() <= 0) {
             throw new IllegalArgumentException("ticketCount must be >= 1");
+        }
+
+        if (req.ticketAmount() == null) {
+            throw new IllegalArgumentException("ticketAmount is required");
         }
 
         Optional<Ticket> existingForTxn = req.transactionId() != null
                 ? ticketRepository.findFirstByTransactionId(req.transactionId())
                 : Optional.empty();
 
-        int customerId = existingForTxn
-                .map(Ticket::getCustomerId)
-                .filter(id -> id != null)
-                .orElseGet(customerIdService::allocateUniqueCustomerId);
+        String userId = existingForTxn
+                .map(Ticket::getUserId)
+                .filter(id -> id != null && !id.isBlank())
+                .orElseGet(() -> shortUuid());
 
         String normalizedPhone = normalizePhoneLast10(req.phoneNumber());
 
@@ -50,10 +61,10 @@ public class ManualTransactionService {
         purchase.setFullName(req.fullName());
         purchase.setEmail(req.email());
         purchase.setPhoneNumber(normalizedPhone);
-        purchase.setCustomerId(customerId);
-        purchase.setTransactionId(req.transactionId().trim());
+        purchase.setUserId(userId);
+        purchase.setTransactionId(req.transactionId() == null ? null : req.transactionId().trim());
         purchase.setTicketAmount(req.ticketAmount());
-        purchase.setStatus(TicketStatus.TRANSACTION_MADE);
+        purchase.setStatus(status);
         purchase.setTicketCount(req.effectiveTicketCount());
 
         int count = purchase.getTicketCount();
@@ -65,83 +76,73 @@ public class ManualTransactionService {
             t.setFullName(purchase.getFullName());
             t.setEmail(purchase.getEmail());
             t.setPhoneNumber(normalizedPhone);
-            t.setCustomerId(customerId);
+            t.setUserId(userId);
             t.setTransactionId(purchase.getTransactionId());
             t.setTicketAmount(purchase.getTicketAmount());
-            t.setStatus(TicketStatus.TRANSACTION_MADE);
+            t.setStatus(status);
             t.setTicketCount(count);
             saved.add(ticketRepository.save(t));
         }
 
-        log.info("event=manual_transaction_recorded customerId={} ticketCount={} transactionId={}", customerId, saved.size(), req.transactionId());
+        log.info("event=manual_transaction_recorded userId={} ticketCount={} transactionId={} status={}", userId, saved.size(), req.transactionId(), status);
 
-        return new ManualTransactionResult(customerId, saved.size());
+        return new ManualTransactionResult(userId, saved.size());
     }
 
-    /**
-     * Moves all tickets of a customer from TRANSACTION_MADE -> ISSUED.
-     *
-     * <p>This updates existing rows (keeps ticketId/qrCodeId stable) then triggers the existing
-     * purchase-issued email/card generation by publishing {@link TicketPurchaseIssuedEvent}.
-     */
     @Transactional
-    public List<Ticket> validateTransactionAndIssueTickets(int customerId) {
-        List<Ticket> tickets = ticketRepository.findByCustomerId(customerId);
+    public List<Ticket> validateTransactionAndIssueTickets(String userId) {
+        List<Ticket> tickets = ticketRepository.findByUserId(userId);
         if (tickets.isEmpty()) {
-            throw new IllegalArgumentException("No tickets found for customerId=" + customerId);
+            throw new IllegalArgumentException("No tickets found for userId=" + userId);
         }
 
-        boolean anyPending = tickets.stream().anyMatch(t -> t.getStatus() == TicketStatus.TRANSACTION_MADE);
+        boolean anyPending = tickets.stream().anyMatch(t ->
+                t.getStatus() == TicketStatus.TRANSACTION_MADE || t.getStatus() == TicketStatus.TRANSACTION_PENDING);
         if (!anyPending) {
-            log.info("event=manual_transaction_validate_noop customerId={} reason=no_pending", customerId);
+            log.info("event=manual_transaction_validate_noop userId={} reason=no_pending", userId);
             return tickets;
         }
 
         for (Ticket t : tickets) {
-            if (t.getStatus() == TicketStatus.TRANSACTION_MADE) {
+            if (t.getStatus() == TicketStatus.TRANSACTION_MADE || t.getStatus() == TicketStatus.TRANSACTION_PENDING) {
                 t.setStatus(TicketStatus.ISSUED);
                 ticketRepository.save(t);
             }
         }
 
-        List<Ticket> issued = ticketRepository.findByCustomerId(customerId);
+        List<Ticket> issued = ticketRepository.findByUserId(userId);
         ticketIssuanceService.publishPurchaseIssuedEvent(issued);
 
-        log.warn("event=manual_transaction_validated customerId={} issuedCount={} ", customerId, issued.size());
+        log.warn("event=manual_transaction_validated userId={} issuedCount={} ", userId, issued.size());
         return issued;
     }
 
     @Transactional
-    public int checkInByCustomerId(int customerId) {
-        List<Ticket> tickets = ticketRepository.findByCustomerId(customerId);
+    public int checkInByUserId(String userId) {
+        List<Ticket> tickets = ticketRepository.findByUserId(userId);
         if (tickets.isEmpty()) {
             return 0;
         }
 
         int updated = 0;
-        // Route through the check-in service so the purchase-level check-in email event is published.
         for (Ticket t : tickets) {
-            if (t.getQrCodeId() == null || t.getQrCodeId().isBlank()) {
-                continue;
-            }
+            if (t.getQrCodeId() == null || t.getQrCodeId().isBlank()) continue;
             Ticket saved = ticketCheckInService.checkInByBarcode(t.getQrCodeId()).orElse(null);
-            if (saved != null && saved.getStatus() == TicketStatus.USED) {
-                updated++;
-            }
+            if (saved != null && saved.getStatus() == TicketStatus.USED) updated++;
         }
         return updated;
     }
 
     private static String normalizePhoneLast10(String input) {
-        if (input == null) {
-            return null;
-        }
+        if (input == null) return null;
         String digits = input.replaceAll("\\D", "");
-        if (digits.length() <= 10) {
-            return digits;
-        }
+        if (digits.length() <= 10) return digits;
         return digits.substring(digits.length() - 10);
     }
 
-    public record ManualTransactionResult(int customerId, int ticketCount) {}
+    private static String shortUuid() {
+        return UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
+    }
+
+    public record ManualTransactionResult(String userId, int ticketCount) {}
 }

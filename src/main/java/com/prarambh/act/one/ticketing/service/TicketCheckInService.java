@@ -39,7 +39,7 @@ public class TicketCheckInService {
 
         // Only email when ALL tickets from the same purchase group are now USED.
         // Primary grouping: (email, phone, showId) for legacy flows.
-        // Fallback grouping: customerId (manual transaction flow can have null showId).
+        // Fallback grouping: userId (manual transaction flow can have null showId).
         if (saved.getEmail() != null && saved.getPhoneNumber() != null && saved.getShowId() != null) {
             long remainingIssued = ticketRepository.countByEmailIgnoreCaseAndPhoneNumberIgnoreCaseAndShowIdAndStatus(
                     saved.getEmail(),
@@ -59,15 +59,15 @@ public class TicketCheckInService {
             } else {
                 log.debug("event=purchase_checked_in_partial remainingIssued={} groupEmail={} showId={}", remainingIssued, saved.getEmail(), saved.getShowId());
             }
-        } else if (saved.getCustomerId() != null) {
-            // Manual transaction flow: group by customerId (best-effort, matches the admin check-in endpoint).
-            List<Ticket> customerTickets = ticketRepository.findByCustomerId(saved.getCustomerId());
-            boolean anyIssuedRemaining = customerTickets.stream().anyMatch(t -> t.getStatus() == TicketStatus.ISSUED);
+        } else if (saved.getUserId() != null) {
+            // Manual transaction flow: group by userId (best-effort, matches the admin check-in endpoint).
+            List<Ticket> userTickets = ticketRepository.findByUserId(saved.getUserId());
+            boolean anyIssuedRemaining = userTickets.stream().anyMatch(t -> t.getStatus() == TicketStatus.ISSUED);
             if (!anyIssuedRemaining) {
-                eventPublisher.publishEvent(new TicketPurchaseCheckedInEvent(List.copyOf(customerTickets)));
-                log.debug("event=purchase_checked_in_all_used groupCustomerId={} ticketCount={}", saved.getCustomerId(), customerTickets.size());
+                eventPublisher.publishEvent(new TicketPurchaseCheckedInEvent(List.copyOf(userTickets)));
+                log.debug("event=purchase_checked_in_all_used groupUserId={} ticketCount={}", saved.getUserId(), userTickets.size());
             } else {
-                log.debug("event=purchase_checked_in_partial groupCustomerId={} remainingIssued=true", saved.getCustomerId());
+                log.debug("event=purchase_checked_in_partial groupUserId={} remainingIssued=true", saved.getUserId());
             }
         }
 

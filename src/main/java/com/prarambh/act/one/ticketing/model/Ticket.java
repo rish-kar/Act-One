@@ -24,7 +24,7 @@ import lombok.extern.slf4j.Slf4j;
  * <ul>
  *   <li>All timestamps are captured in IST ({@code Asia/Kolkata}).</li>
  *   <li>Dates and times are stored as separate columns.</li>
- *   <li>{@code qrCodeId} is a short identifier intended to be encoded as a QR code on the ticket.</li>
+ *   <li>qrCodeId is a short identifier intended to be encoded as a QR code on the ticket.</li>
  * </ul>
  */
 @Entity
@@ -89,20 +89,17 @@ public class Ticket {
     /**
      * Number of tickets purchased in the same purchase request.
      *
-     * <p>When a customer buys N tickets, the system creates N ticket rows and each row stores
+     * <p>When a user buys N tickets, the system creates N ticket rows and each row stores
      * the same {@code ticketCount=N} for traceability.
      */
     @Column(nullable = false)
     private int ticketCount = 1;
 
     /**
-     * 4-digit customer identifier (1000-9999). Not unique across rows.
-     *
-     * <p>Same customer can have multiple rows (multiple tickets / multiple purchases), so this value
-     * can repeat across tickets.
+     * Short user UID used across the system (short UUID string). Nullable.
      */
-    @Column(nullable = true)
-    private Integer customerId;
+    @Column(name = "user_id", nullable = true, length = 32)
+    private String userId;
 
     /**
      * Transaction identifier provided by the buyer (e.g., UPI transaction ID).
@@ -236,12 +233,12 @@ public class Ticket {
         this.ticketCount = ticketCount;
     }
 
-    public Integer getCustomerId() {
-        return customerId;
+    public String getUserId() {
+        return userId;
     }
 
-    public void setCustomerId(Integer customerId) {
-        this.customerId = customerId;
+    public void setUserId(String userId) {
+        this.userId = userId;
     }
 
     public String getTransactionId() {

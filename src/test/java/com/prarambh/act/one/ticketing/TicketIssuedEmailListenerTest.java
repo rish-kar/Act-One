@@ -112,8 +112,8 @@ class TicketIssuedEmailListenerTest {
         org.junit.jupiter.api.Assertions.assertEquals(0, emailSender.deliveryCount());
 
         // After manual validation -> ISSUED, email is sent
-        int customerId = tickets.get(0).getCustomerId();
-        manualTransactionService.validateTransactionAndIssueTickets(customerId);
+        String userId = tickets.get(0).getUserId();
+        manualTransactionService.validateTransactionAndIssueTickets(userId);
 
         org.junit.jupiter.api.Assertions.assertTrue(emailSender.awaitDeliveryCount(1, 8000));
         org.junit.jupiter.api.Assertions.assertEquals(1, emailSender.deliveryCount());
@@ -136,8 +136,8 @@ class TicketIssuedEmailListenerTest {
         org.junit.jupiter.api.Assertions.assertEquals(0, emailSender.deliveryCount());
 
         // After manual validation -> ISSUED, one email is sent for the purchase
-        int customerId = tickets.get(0).getCustomerId();
-        manualTransactionService.validateTransactionAndIssueTickets(customerId);
+        String userId = tickets.get(0).getUserId();
+        manualTransactionService.validateTransactionAndIssueTickets(userId);
 
         org.junit.jupiter.api.Assertions.assertTrue(emailSender.awaitDeliveryCount(1, 8000));
         org.junit.jupiter.api.Assertions.assertEquals(1, emailSender.deliveryCount());
@@ -158,8 +158,8 @@ class TicketIssuedEmailListenerTest {
         List<Ticket> tickets = ticketIssuanceService.issueTickets(t);
 
         // Validate the transaction
-        int customerId = tickets.get(0).getCustomerId();
-        manualTransactionService.validateTransactionAndIssueTickets(customerId);
+        String userId = tickets.get(0).getUserId();
+        manualTransactionService.validateTransactionAndIssueTickets(userId);
 
         // Email should NOT be sent because email is missing.
         // Allow a short window for any async listeners; then assert nothing was sent.
@@ -208,8 +208,8 @@ class TicketIssuedEmailListenerTest {
         List<Ticket> tickets = ticketIssuanceService.issueTickets(t);
 
         // Validate the transaction to move to ISSUED
-        int customerId = tickets.get(0).getCustomerId();
-        List<Ticket> issued = manualTransactionService.validateTransactionAndIssueTickets(customerId);
+        String userId = tickets.get(0).getUserId();
+        List<Ticket> issued = manualTransactionService.validateTransactionAndIssueTickets(userId);
         org.junit.jupiter.api.Assertions.assertTrue(emailSender.awaitDeliveryCount(1, 8000));
         org.junit.jupiter.api.Assertions.assertEquals(1, emailSender.deliveryCount());
 

@@ -36,24 +36,24 @@ public class TicketCardDownloadController {
     private final TicketCardGenerator ticketCardGenerator;
 
     /**
-     * Generate ticket images for all tickets belonging to a customer and return as a zip file.
+     * Generate ticket images for all tickets belonging to a user and return as a zip file.
      *
      * <p>Response content type: application/zip.
      */
-    @GetMapping(value = "/by-customer/{customerId}", produces = "application/zip")
-    public ResponseEntity<byte[]> downloadTicketCardsZip(@PathVariable Integer customerId) {
-        if (customerId == null) {
+    @GetMapping(value = "/by-user/{userId}", produces = "application/zip")
+    public ResponseEntity<byte[]> downloadTicketCardsZip(@PathVariable String userId) {
+        if (userId == null || userId.isBlank()) {
             return ResponseEntity.badRequest().body(new byte[0]);
         }
 
-        List<Ticket> tickets = ticketRepository.findByCustomerId(customerId);
+        List<Ticket> tickets = ticketRepository.findByUserId(userId.trim());
         if (tickets == null || tickets.isEmpty()) {
             return ResponseEntity.status(404)
                     .contentType(MediaType.APPLICATION_JSON)
-                    .body(toJsonBytes(Map.of("message", "Customer not found", "customerId", customerId)));
+                    .body(toJsonBytes(Map.of("message", "User not found", "userId", userId)));
         }
 
-        String zipName = "ticket-cards-customer-" + customerId + ".zip";
+        String zipName = "ticket-cards-user-" + userId.trim() + ".zip";
 
         try {
             byte[] zipBytes = buildZip(tickets);
@@ -67,10 +67,10 @@ public class TicketCardDownloadController {
                     .headers(headers)
                     .body(zipBytes);
         } catch (Exception e) {
-            log.error("event=ticket_cards_zip_failed customerId={} error={}", customerId, e.toString());
+            log.error("event=ticket_cards_zip_failed userId={} error={}", userId, e.toString());
             return ResponseEntity.internalServerError()
                     .contentType(MediaType.APPLICATION_JSON)
-                    .body(toJsonBytes(Map.of("message", "Failed to generate ticket cards", "customerId", customerId)));
+                    .body(toJsonBytes(Map.of("message", "Failed to generate ticket cards", "userId", userId)));
         }
     }
 
