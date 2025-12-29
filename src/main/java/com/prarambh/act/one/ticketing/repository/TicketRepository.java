@@ -49,6 +49,9 @@ public interface TicketRepository extends JpaRepository<Ticket, UUID> {
     /** True if any ticket row exists for the given userId. */
     boolean existsByUserId(String userId);
 
+    @Query("SELECT DISTINCT t.showName, t.showId FROM Ticket t WHERE t.showName IS NOT NULL")
+    List<Object[]> findDistinctShows();
+
     /** Find tickets by userId and status. */
     List<Ticket> findByUserIdAndStatus(String userId, TicketStatus status);
 

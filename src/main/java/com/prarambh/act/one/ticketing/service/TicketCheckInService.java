@@ -21,6 +21,7 @@ public class TicketCheckInService {
 
     private final TicketRepository ticketRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final AuditoriumService auditoriumService;
 
     @Transactional
     public Optional<Ticket> checkInByBarcode(String qrCodeId) {
@@ -36,6 +37,9 @@ public class TicketCheckInService {
 
         ticket.markUsed();
         Ticket saved = ticketRepository.save(ticket);
+
+        // Update auditorium seat counts (checked-in seats).
+        auditoriumService.recalcByShowIdIfPresent(saved.getShowId());
 
         // Only email when ALL tickets from the same purchase group are now USED.
         // Primary grouping: (email, phone, showId) for legacy flows.

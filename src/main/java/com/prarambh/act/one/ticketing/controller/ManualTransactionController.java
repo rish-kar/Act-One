@@ -191,22 +191,12 @@ public class ManualTransactionController {
     ) {
         if (!isAdminPasswordValid(headerPassword)) return ResponseEntity.status(403).body(Map.of("message","Invalid admin password"));
 
-        List<Ticket> tickets = ticketRepository.findByTransactionId(transactionId);
-        if (tickets == null || tickets.isEmpty()) {
-            return ResponseEntity.status(404).body(Map.of("message","Transaction not found","transactionId", transactionId));
+        try {
+            List<Ticket> issued = manualTransactionService.validateTransactionAndIssueTicketsByTransactionId(transactionId);
+            return ResponseEntity.ok(Map.of("transactionId", transactionId, "issuedCount", issued.size()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(404).body(Map.of("message", e.getMessage(), "transactionId", transactionId));
         }
-
-        int changed = 0;
-        for (Ticket t : tickets) {
-            if (t.getStatus() == TicketStatus.TRANSACTION_MADE || t.getStatus() == TicketStatus.TRANSACTION_PENDING) {
-                t.setStatus(TicketStatus.ISSUED);
-                ticketRepository.save(t);
-                changed++;
-            }
-        }
-
-        ticketIssuanceService.publishPurchaseIssuedEvent(tickets);
-        return ResponseEntity.ok(Map.of("transactionId", transactionId, "issuedCount", changed));
     }
 
     /**
@@ -220,24 +210,15 @@ public class ManualTransactionController {
     ) {
         if (!isAdminPasswordValid(headerPassword)) return ResponseEntity.status(403).body(Map.of("message","Invalid admin password"));
 
-        List<Ticket> tickets = ticketRepository.findByTransactionId(transactionId);
-        if (tickets == null || tickets.isEmpty()) {
-            return ResponseEntity.status(404).body(Map.of("message","Transaction not found","transactionId", transactionId));
-        }
-
-        int checkedIn = 0;
-        for (Ticket t : tickets) {
-            if (t.getStatus() == TicketStatus.ISSUED) {
-                t.markUsed();
-                ticketRepository.save(t);
-                checkedIn++;
+        try {
+            int checkedIn = manualTransactionService.checkInByTransactionId(transactionId);
+            if (checkedIn == 0) {
+                return ResponseEntity.status(404).body(Map.of("message", "Transaction not found", "transactionId", transactionId));
             }
+            return ResponseEntity.ok(Map.of("transactionId", transactionId, "checkedInCount", checkedIn));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
         }
-
-        // Publish check-in event when applicable
-        ticketCheckInService.checkInByBarcode(tickets.get(0).getQrCodeId()); // best-effort single call to trigger events
-
-        return ResponseEntity.ok(Map.of("transactionId", transactionId, "checkedInCount", checkedIn));
     }
 
     /**

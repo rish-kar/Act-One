@@ -24,6 +24,7 @@ public class ManualTransactionService {
     private final TicketRepository ticketRepository;
     private final TicketIssuanceService ticketIssuanceService;
     private final TicketCheckInService ticketCheckInService;
+    private final AuditoriumService auditoriumService;
 
     @Transactional
     public ManualTransactionResult recordTransaction(ManualTransactionController.RecordTransactionRequest req) {
@@ -84,6 +85,9 @@ public class ManualTransactionService {
             saved.add(ticketRepository.save(t));
         }
 
+        // Update auditorium seat counts (booked seats) for this show.
+        auditoriumService.recalcByShowIdIfPresent(purchase.getShowId());
+
         log.info("event=manual_transaction_recorded userId={} ticketCount={} transactionId={} status={}", userId, saved.size(), req.transactionId(), status);
 
         return new ManualTransactionResult(userId, saved.size());
@@ -110,11 +114,67 @@ public class ManualTransactionService {
             }
         }
 
+        // Update auditorium seat counts (confirmed seats).
+        auditoriumService.recalcByShowIdIfPresent(tickets.get(0).getShowId());
+
         List<Ticket> issued = ticketRepository.findByUserId(userId);
         ticketIssuanceService.publishPurchaseIssuedEvent(issued);
 
         log.warn("event=manual_transaction_validated userId={} issuedCount={} ", userId, issued.size());
         return issued;
+    }
+
+    @Transactional
+    public List<Ticket> validateTransactionAndIssueTicketsByTransactionId(String transactionId) {
+        if (transactionId == null || transactionId.isBlank()) {
+            throw new IllegalArgumentException("transactionId required");
+        }
+
+        List<Ticket> tickets = ticketRepository.findByTransactionId(transactionId.trim());
+        if (tickets.isEmpty()) {
+            throw new IllegalArgumentException("No tickets found for transactionId=" + transactionId);
+        }
+
+        boolean anyPending = tickets.stream().anyMatch(t ->
+                t.getStatus() == TicketStatus.TRANSACTION_MADE || t.getStatus() == TicketStatus.TRANSACTION_PENDING);
+        if (!anyPending) {
+            return tickets;
+        }
+
+        for (Ticket t : tickets) {
+            if (t.getStatus() == TicketStatus.TRANSACTION_MADE || t.getStatus() == TicketStatus.TRANSACTION_PENDING) {
+                t.setStatus(TicketStatus.ISSUED);
+                ticketRepository.save(t);
+            }
+        }
+
+        auditoriumService.recalcByShowIdIfPresent(tickets.get(0).getShowId());
+
+        List<Ticket> issued = ticketRepository.findByTransactionId(transactionId.trim());
+        ticketIssuanceService.publishPurchaseIssuedEvent(issued);
+        return issued;
+    }
+
+    @Transactional
+    public int checkInByTransactionId(String transactionId) {
+        if (transactionId == null || transactionId.isBlank()) {
+            throw new IllegalArgumentException("transactionId required");
+        }
+        List<Ticket> tickets = ticketRepository.findByTransactionId(transactionId.trim());
+        if (tickets.isEmpty()) {
+            return 0;
+        }
+        int updated = 0;
+        for (Ticket t : tickets) {
+            if (t.getQrCodeId() == null || t.getQrCodeId().isBlank()) continue;
+            Ticket saved = ticketCheckInService.checkInByBarcode(t.getQrCodeId()).orElse(null);
+            if (saved != null && saved.getStatus() == TicketStatus.USED) updated++;
+        }
+
+        if (!tickets.isEmpty()) {
+            auditoriumService.recalcByShowIdIfPresent(tickets.get(0).getShowId());
+        }
+        return updated;
     }
 
     @Transactional
@@ -129,6 +189,10 @@ public class ManualTransactionService {
             if (t.getQrCodeId() == null || t.getQrCodeId().isBlank()) continue;
             Ticket saved = ticketCheckInService.checkInByBarcode(t.getQrCodeId()).orElse(null);
             if (saved != null && saved.getStatus() == TicketStatus.USED) updated++;
+        }
+
+        if (!tickets.isEmpty()) {
+            auditoriumService.recalcByShowIdIfPresent(tickets.get(0).getShowId());
         }
         return updated;
     }

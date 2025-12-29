@@ -27,6 +27,7 @@ public class TicketIssuanceService {
     private final UserIdService userIdService;
     private final UserRepository userRepository;
     private final UserService userService;
+    private final AuditoriumService auditoriumService;
 
     /**
      * Issues one purchase request which may contain multiple tickets.
@@ -108,6 +109,9 @@ public class TicketIssuanceService {
             t.setTicketAmount(amount);
 
             Ticket saved = ticketRepository.save(t);
+
+            // Update auditorium seats for this show whenever we record a booked ticket.
+            auditoriumService.recalcByShowIdIfPresent(saved.getShowId());
 
             // Ensure a corresponding User record exists for this userId.
             try {

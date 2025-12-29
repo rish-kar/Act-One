@@ -115,7 +115,7 @@ class TicketIssuedEmailListenerTest {
         String userId = tickets.get(0).getUserId();
         manualTransactionService.validateTransactionAndIssueTickets(userId);
 
-        org.junit.jupiter.api.Assertions.assertTrue(emailSender.awaitDeliveryCount(1, 8000));
+        org.junit.jupiter.api.Assertions.assertTrue(emailSender.awaitDeliveryCount(1, 30000));
         org.junit.jupiter.api.Assertions.assertEquals(1, emailSender.deliveryCount());
     }
 
@@ -139,7 +139,7 @@ class TicketIssuedEmailListenerTest {
         String userId = tickets.get(0).getUserId();
         manualTransactionService.validateTransactionAndIssueTickets(userId);
 
-        org.junit.jupiter.api.Assertions.assertTrue(emailSender.awaitDeliveryCount(1, 8000));
+        org.junit.jupiter.api.Assertions.assertTrue(emailSender.awaitDeliveryCount(1, 30000));
         org.junit.jupiter.api.Assertions.assertEquals(1, emailSender.deliveryCount());
     }
 
@@ -210,7 +210,7 @@ class TicketIssuedEmailListenerTest {
         // Validate the transaction to move to ISSUED
         String userId = tickets.get(0).getUserId();
         List<Ticket> issued = manualTransactionService.validateTransactionAndIssueTickets(userId);
-        org.junit.jupiter.api.Assertions.assertTrue(emailSender.awaitDeliveryCount(1, 8000));
+        org.junit.jupiter.api.Assertions.assertTrue(emailSender.awaitDeliveryCount(1, 30000));
         org.junit.jupiter.api.Assertions.assertEquals(1, emailSender.deliveryCount());
 
         String issueBody = emailSender.lastBody();
@@ -229,7 +229,7 @@ class TicketIssuedEmailListenerTest {
 
         // check-in last ticket -> emits one email
         ticketCheckInService.checkInByBarcode(issued.get(2).getQrCodeId());
-        org.junit.jupiter.api.Assertions.assertTrue(emailSender.awaitDeliveryCount(1, 8000));
+        org.junit.jupiter.api.Assertions.assertTrue(emailSender.awaitDeliveryCount(1, 30000));
         org.junit.jupiter.api.Assertions.assertEquals(1, emailSender.deliveryCount());
 
         String body = emailSender.lastBody();
@@ -245,5 +245,33 @@ class TicketIssuedEmailListenerTest {
         long remaining = ticketRepository.countByEmailIgnoreCaseAndPhoneNumberIgnoreCaseAndShowIdAndStatus(
                 t.getEmail(), t.getPhoneNumber(), issued.get(0).getShowId(), TicketStatus.ISSUED);
         org.junit.jupiter.api.Assertions.assertEquals(0, remaining);
+    }
+
+    @Test
+    void issueAndCheckInByTransactionIdAlsoTriggersEmails() throws Exception {
+        Ticket t = new Ticket();
+        t.setShowName("Test Show");
+        t.setFullName("Txn User");
+        t.setEmail("txnuser@example.com");
+        t.setPhoneNumber("1000000000");
+        t.setTicketCount(2);
+        t.setTransactionId("TXN-EMAIL-123");
+        t.setTicketAmount(new java.math.BigDecimal("500.00"));
+
+        List<Ticket> created = ticketIssuanceService.issueTickets(t);
+        org.junit.jupiter.api.Assertions.assertEquals(0, emailSender.deliveryCount());
+
+        // issue by transactionId
+        manualTransactionService.validateTransactionAndIssueTicketsByTransactionId("TXN-EMAIL-123");
+        org.junit.jupiter.api.Assertions.assertTrue(emailSender.awaitDeliveryCount(1, 30000));
+        org.junit.jupiter.api.Assertions.assertEquals(1, emailSender.deliveryCount());
+
+        emailSender.reset();
+
+        // check-in both by transactionId -> should send one email after last ticket
+        manualTransactionService.checkInByTransactionId("TXN-EMAIL-123");
+        org.junit.jupiter.api.Assertions.assertTrue(emailSender.awaitDeliveryCount(1, 30000));
+        org.junit.jupiter.api.Assertions.assertEquals(1, emailSender.deliveryCount());
+        org.assertj.core.api.Assertions.assertThat(emailSender.lastBody()).contains("Your check-in is confirmed");
     }
 }

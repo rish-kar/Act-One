@@ -5,22 +5,16 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
-import java.math.BigDecimal;
 import java.time.Instant;
 
 @Entity
-@Table(name = "donations")
-public class Donation {
+@Table(name = "feedback")
+public class Feedback {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
-    // unique random 10-char serial (alphanumeric)
-    @Column(name = "serial_number", nullable = false, unique = true, length = 32)
-    private String serialNumber;
 
     @Column(name = "full_name", nullable = false)
     private String fullName;
@@ -31,31 +25,14 @@ public class Donation {
     @Column(name = "email", nullable = true)
     private String email;
 
-    @Column(name = "message", nullable = true)
+    @Column(name = "message", nullable = false, length = 2048)
     private String message;
-
-    @Column(name = "amount", nullable = false, precision = 10, scale = 2)
-    private BigDecimal amount;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt = Instant.now();
 
-    public Donation() {}
-
-    @PrePersist
-    void onCreate() {
-        if (serialNumber == null || serialNumber.isBlank()) {
-            // Best-effort fallback if the entity is persisted without going through DonationService.
-            serialNumber = java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 10).toUpperCase();
-        }
-    }
-
-    // getters and setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
-
-    public String getSerialNumber() { return serialNumber; }
-    public void setSerialNumber(String serialNumber) { this.serialNumber = serialNumber; }
 
     public String getFullName() { return fullName; }
     public void setFullName(String fullName) { this.fullName = fullName; }
@@ -68,9 +45,6 @@ public class Donation {
 
     public String getMessage() { return message; }
     public void setMessage(String message) { this.message = message; }
-
-    public BigDecimal getAmount() { return amount; }
-    public void setAmount(BigDecimal amount) { this.amount = amount; }
 
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }

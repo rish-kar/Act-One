@@ -12,6 +12,8 @@ import jakarta.validation.constraints.NotBlank;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -43,6 +45,22 @@ public class TicketController {
     private final ShowSettingsService showSettingsService;
     private final TicketIssuanceService ticketIssuanceService;
     private final TicketCheckInService ticketCheckInService;
+
+    /**
+     * Fetch distinct shows from the tickets table.
+     */
+    @GetMapping("/shows")
+    public ResponseEntity<?> getShowsFromTickets() {
+        List<Object[]> results = ticketRepository.findDistinctShows();
+        List<Map<String, String>> shows = new ArrayList<>();
+        for (Object[] row : results) {
+            Map<String, String> map = new LinkedHashMap<>();
+            map.put("showName", (String) row[0]);
+            map.put("showId", (String) row[1]);
+            shows.add(map);
+        }
+        return ResponseEntity.ok(shows);
+    }
 
     /**
      * Issue a ticket.
