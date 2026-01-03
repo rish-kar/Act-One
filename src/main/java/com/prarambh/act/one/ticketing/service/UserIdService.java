@@ -7,9 +7,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Allocates a short userId (8-char UUID).
+ * Generates short unique user identifiers used as userId in tickets and users tables.
  *
- * <p>This is best-effort uniqueness across all tickets.
+ * <p>The algorithm produces an 8-character uppercase alphanumeric string and verifies
+ * uniqueness against tickets repository to avoid collisions.
  */
 @Service
 @RequiredArgsConstructor
@@ -19,6 +20,11 @@ public class UserIdService {
     private final com.prarambh.act.one.ticketing.repository.TicketRepository ticketRepository;
     private final SecureRandom random = new SecureRandom();
 
+    /**
+     * Allocate a unique short user id. Tries multiple times in case of collision.
+     *
+     * @return allocated user id (8 chars, uppercase)
+     */
     @Transactional(readOnly = true)
     public String allocateUniqueUserId() {
         for (int attempt = 1; attempt <= 25; attempt++) {
@@ -44,4 +50,3 @@ public class UserIdService {
         return java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
     }
 }
-

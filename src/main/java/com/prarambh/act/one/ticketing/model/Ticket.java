@@ -19,30 +19,23 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Ticket entity stored in the database.
- *
- * <p>Important notes:
- * <ul>
- *   <li>All timestamps are captured in IST ({@code Asia/Kolkata}).</li>
- *   <li>Dates and times are stored as separate columns.</li>
- *   <li>qrCodeId is a short identifier intended to be encoded as a QR code on the ticket.</li>
- * </ul>
  */
 @Entity
 @Table(name = "tickets")
 @Slf4j
 public class Ticket {
 
-    /** Primary key identifier for the ticket. */
     @Id
     private UUID ticketId;
 
-    /** Show ID is currently nullable (future expansion). */
     @Column(nullable = true)
     private String showId;
 
-    /** Human-readable show name (can be updated by admin endpoints). */
     @Column(nullable = false)
     private String showName;
+
+    @Column(nullable = true, name = "auditorium_id")
+    private String auditoriumId;
 
     @Column(nullable = false)
     private String fullName;
@@ -53,59 +46,32 @@ public class Ticket {
     @Column(nullable = false)
     private String phoneNumber;
 
-    /** Ticket lifecycle status. */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private TicketStatus status;
 
-    /** Creation date in IST. */
     @Column(nullable = false)
     private LocalDate createdAtDate;
 
-    /**
-     * Creation time in IST.
-     *
-     * Stored as a 12-hour string using {@link Ist12HourTimeConverter}.
-     */
     @Convert(converter = Ist12HourTimeConverter.class)
     @Column(nullable = false)
     private LocalTime createdAtTime;
 
-    /** Check-in date in IST (nullable until checked-in). */
     private LocalDate usedAtDate;
 
-    /**
-     * Check-in time in IST (nullable until checked-in).
-     * Stored as a 12-hour string using {@link Ist12HourTimeConverter}.
-     */
     @Convert(converter = Ist12HourTimeConverter.class)
     @Column
     private LocalTime usedAtTime;
 
-    /** Short QR code identifier intended for QR representation. Stored as exactly 18 characters. */
     @Column(nullable = false, length = 18)
     private String qrCodeId;
 
-    /**
-     * Number of tickets purchased in the same purchase request.
-     *
-     * <p>When a user buys N tickets, the system creates N ticket rows and each row stores
-     * the same {@code ticketCount=N} for traceability.
-     */
     @Column(nullable = false)
     private int ticketCount = 1;
 
-    /**
-     * Short user UID used across the system (short UUID string). Nullable.
-     */
     @Column(name = "user_id", nullable = true, length = 32)
     private String userId;
 
-    /**
-     * Transaction identifier provided by the buyer (e.g., UPI transaction ID).
-     *
-     * <p>Used for manual validation before tickets are issued.
-     */
     @Column(nullable = true)
     private String transactionId;
 
@@ -134,6 +100,14 @@ public class Ticket {
 
     public void setShowName(String showName) {
         this.showName = showName;
+    }
+
+    public String getAuditoriumId() {
+        return auditoriumId;
+    }
+
+    public void setAuditoriumId(String auditoriumId) {
+        this.auditoriumId = auditoriumId;
     }
 
     public String getFullName() {
@@ -220,7 +194,6 @@ public class Ticket {
         if (s.length() > 18) {
             return s.substring(0, 18);
         }
-        // If shorter than 18, append UUID hex to reach 18.
         String extra = UUID.randomUUID().toString().replace("-", "");
         return (s + extra).substring(0, 18);
     }
@@ -257,9 +230,6 @@ public class Ticket {
         this.ticketAmount = ticketAmount;
     }
 
-    /**
-     * Mark the ticket as used (checked in) using IST clock.
-     */
     public void markUsed() {
         ZoneId ist = ZoneId.of("Asia/Kolkata");
         ZonedDateTime nowIst = ZonedDateTime.now(ist);
@@ -269,23 +239,17 @@ public class Ticket {
         log.info("Ticket marked USED: ticketId={}, usedAtDate={}, usedAtTime={} (stored via converter)", ticketId, usedAtDate, usedAtTime);
     }
 
-    /**
-     * Entity lifecycle callback to ensure IDs and created-at fields are set.
-     */
     @PrePersist
     protected void onCreate() {
         if (ticketId == null) {
             ticketId = UUID.randomUUID();
         }
         if (qrCodeId == null || qrCodeId.isBlank()) {
-            // Generate and store qrCodeId as exactly 18 characters (hyphen-free).
             qrCodeId = UUID.randomUUID().toString().replace("-", "").substring(0, 18);
         } else {
-            // Ensure any externally provided qrCodeId is normalized.
             qrCodeId = normalizeBarcodeId18(qrCodeId);
         }
 
-        // Keep showId short and related to showName.
         if ((showId == null || showId.isBlank()) && showName != null && !showName.isBlank()) {
             showId = ShowIdGenerator.fromShowName(showName);
         }
@@ -300,8 +264,6 @@ public class Ticket {
         }
 
         if (status == null) {
-            // Default is ISSUED for legacy issuance flow, but transaction-first endpoints will
-            // explicitly set TRANSACTION_MADE.
             status = TicketStatus.ISSUED;
         }
 

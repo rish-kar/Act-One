@@ -44,11 +44,13 @@ public class AuditoriumService {
     }
 
     @Transactional
-    public Auditorium upsert(String showId, String auditoriumName, LocalDate showDate, LocalTime showTime, int totalSeats, int reservedSeats) {
+    public Auditorium upsert(String showId, String showName, String auditoriumName, LocalDate showDate, LocalTime showTime, java.math.BigDecimal ticketAmount, int totalSeats, int reservedSeats) {
         if (!StringUtils.hasText(showId)) throw new IllegalArgumentException("showId required");
+        if (!StringUtils.hasText(showName)) throw new IllegalArgumentException("showName required");
         if (!StringUtils.hasText(auditoriumName)) throw new IllegalArgumentException("auditoriumName required");
         if (showDate == null) throw new IllegalArgumentException("showDate required");
         if (showTime == null) throw new IllegalArgumentException("showTime required");
+        if (ticketAmount == null) throw new IllegalArgumentException("ticketAmount required");
         if (totalSeats <= 0) throw new IllegalArgumentException("totalSeats must be > 0");
         if (reservedSeats < 0) throw new IllegalArgumentException("reservedSeats must be >= 0");
 
@@ -60,14 +62,21 @@ public class AuditoriumService {
         a.setAuditoriumId(id);
         a.setAuditoriumName(auditoriumName.trim());
         a.setShowId(showId.trim());
+        a.setShowName(showName.trim());
         a.setShowDate(showDate);
         a.setShowTime(showTime);
+        a.setTicketAmount(ticketAmount);
         a.setTotalSeats(totalSeats);
         a.setReservedSeats(reservedSeats);
 
         // Recalculate seats from tickets
         recalcInto(a);
         return auditoriumRepository.save(a);
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.List<Auditorium> findAll() {
+        return auditoriumRepository.findAll();
     }
 
     @Transactional(readOnly = true)
@@ -87,10 +96,15 @@ public class AuditoriumService {
     @Transactional
     public void recalcByShowIdIfPresent(String showId) {
         if (!org.springframework.util.StringUtils.hasText(showId)) return;
-        auditoriumRepository.findFirstByShowId(showId.trim()).ifPresent(a -> {
-            recalcInto(a);
-            auditoriumRepository.save(a);
-        });
+        String s = showId.trim();
+        // avoid relying on a derived repository query to keep compilation robust
+        auditoriumRepository.findAll().stream()
+                .filter(a -> s.equals(a.getShowId()))
+                .findFirst()
+                .ifPresent(a -> {
+                    recalcInto(a);
+                    auditoriumRepository.save(a);
+                });
     }
 
     private void recalcInto(Auditorium a) {
@@ -114,21 +128,24 @@ public class AuditoriumService {
     }
 
     @Transactional
-    public Auditorium update(String auditoriumId, String showId, String auditoriumName, LocalDate showDate, LocalTime showTime, int totalSeats, int reservedSeats) {
+    public Auditorium update(String auditoriumId, String showId, String showName, String auditoriumName, LocalDate showDate, LocalTime showTime, java.math.BigDecimal ticketAmount, int totalSeats, int reservedSeats) {
         if (!StringUtils.hasText(auditoriumId)) throw new IllegalArgumentException("auditoriumId required");
         if (!StringUtils.hasText(showId)) throw new IllegalArgumentException("showId required");
+        if (!StringUtils.hasText(showName)) throw new IllegalArgumentException("showName required");
         if (!StringUtils.hasText(auditoriumName)) throw new IllegalArgumentException("auditoriumName required");
         if (showDate == null) throw new IllegalArgumentException("showDate required");
         if (showTime == null) throw new IllegalArgumentException("showTime required");
+        if (ticketAmount == null) throw new IllegalArgumentException("ticketAmount required");
         if (totalSeats <= 0) throw new IllegalArgumentException("totalSeats must be > 0");
         if (reservedSeats < 0) throw new IllegalArgumentException("reservedSeats must be >= 0");
 
-        Auditorium a = auditoriumRepository.findById(auditoriumId.trim())
-                .orElseThrow(() -> new IllegalArgumentException("auditorium not found"));
+        Auditorium a = auditoriumRepository.findById(auditoriumId.trim()).orElseThrow(() -> new IllegalArgumentException("auditorium not found"));
         a.setShowId(showId.trim());
+        a.setShowName(showName.trim());
         a.setAuditoriumName(auditoriumName.trim());
         a.setShowDate(showDate);
         a.setShowTime(showTime);
+        a.setTicketAmount(ticketAmount);
         a.setTotalSeats(totalSeats);
         a.setReservedSeats(reservedSeats);
         recalcInto(a);
@@ -136,15 +153,16 @@ public class AuditoriumService {
     }
 
     @Transactional
-    public Auditorium patch(String auditoriumId, String showId, String auditoriumName, LocalDate showDate, LocalTime showTime, Integer totalSeats, Integer reservedSeats) {
+    public Auditorium patch(String auditoriumId, String showId, String showName, String auditoriumName, LocalDate showDate, LocalTime showTime, java.math.BigDecimal ticketAmount, Integer totalSeats, Integer reservedSeats) {
         if (!StringUtils.hasText(auditoriumId)) throw new IllegalArgumentException("auditoriumId required");
-        Auditorium a = auditoriumRepository.findById(auditoriumId.trim())
-                .orElseThrow(() -> new IllegalArgumentException("auditorium not found"));
+        Auditorium a = auditoriumRepository.findById(auditoriumId.trim()).orElseThrow(() -> new IllegalArgumentException("auditorium not found"));
 
         if (StringUtils.hasText(showId)) a.setShowId(showId.trim());
+        if (StringUtils.hasText(showName)) a.setShowName(showName.trim());
         if (StringUtils.hasText(auditoriumName)) a.setAuditoriumName(auditoriumName.trim());
         if (showDate != null) a.setShowDate(showDate);
         if (showTime != null) a.setShowTime(showTime);
+        if (ticketAmount != null) a.setTicketAmount(ticketAmount);
         if (totalSeats != null) {
             if (totalSeats <= 0) throw new IllegalArgumentException("totalSeats must be > 0");
             a.setTotalSeats(totalSeats);

@@ -8,9 +8,18 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/**
+ * Creates sample donation data at application startup when the donations table is empty.
+ */
 @Configuration
 public class DonationDataInitializer {
 
+    /**
+     * Seed sample donations if repository is empty.
+     *
+     * @param repo donation repository
+     * @return command line runner
+     */
     @Bean
     CommandLineRunner seedDonations(DonationRepository repo) {
         return args -> {
@@ -37,8 +46,8 @@ public class DonationDataInitializer {
         d.setPhoneNumber(phone);
         d.setEmail(email);
         d.setMessage(msg);
+        d.setTransactionId("DN-SEED-" + java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase());
         d.setAmount(amt);
         return d;
     }
 }
-

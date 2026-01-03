@@ -94,8 +94,24 @@ public class TicketIssuanceService {
         List<Ticket> savedTickets = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             Ticket t = new Ticket();
+            // If the caller provided an auditoriumId, keep it on the ticket so we can reference the auditorium later
+            if (purchaseTicket.getAuditoriumId() != null && !purchaseTicket.getAuditoriumId().isBlank()) {
+                t.setAuditoriumId(purchaseTicket.getAuditoriumId().trim());
+            }
+
+            // If showId or showName is missing, attempt to populate them from the auditorium
+            if ((purchaseTicket.getShowId() == null || purchaseTicket.getShowId().isBlank()) || (purchaseTicket.getShowName() == null || purchaseTicket.getShowName().isBlank())) {
+                String aid = purchaseTicket.getAuditoriumId();
+                if (aid != null && !aid.isBlank()) {
+                    auditoriumService.findById(aid.trim()).ifPresent(aud -> {
+                        if (t.getShowId() == null || t.getShowId().isBlank()) t.setShowId(aud.getShowId());
+                        if (t.getShowName() == null || t.getShowName().isBlank()) t.setShowName(aud.getShowName());
+                    });
+                }
+            }
+            // Fallback to values passed on the purchaseTicket
             t.setShowName(purchaseTicket.getShowName());
-            t.setShowId(purchaseTicket.getShowId());
+            if (t.getShowId() == null || t.getShowId().isBlank()) t.setShowId(purchaseTicket.getShowId());
             t.setFullName(fullName);
             t.setEmail(email);
             t.setPhoneNumber(last10 != null ? last10 : purchaseTicket.getPhoneNumber());

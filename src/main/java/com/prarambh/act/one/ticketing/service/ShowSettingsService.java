@@ -20,6 +20,8 @@ import org.springframework.stereotype.Service;
 public class ShowSettingsService {
 
     private final AtomicReference<String> defaultShowName = new AtomicReference<>();
+    private final AtomicReference<java.time.LocalDate> defaultShowDate = new AtomicReference<>();
+    private final AtomicReference<java.time.LocalTime> defaultShowTime = new AtomicReference<>();
 
     /**
      * @return the default show name if present and non-blank
@@ -30,6 +32,8 @@ public class ShowSettingsService {
 
     /**
      * Sets the default show name.
+     *
+     * @param showName show name to set
      */
     public void setDefaultShowName(String showName) {
         String trimmed = showName == null ? null : showName.trim();
@@ -43,5 +47,39 @@ public class ShowSettingsService {
     public void clearDefaultShowName() {
         defaultShowName.set(null);
         log.info("Default showName cleared in memory");
+    }
+
+    /**
+     * @return the default show date if present
+     */
+    public Optional<java.time.LocalDate> getDefaultShowDate() {
+        return Optional.ofNullable(defaultShowDate.get());
+    }
+
+    /**
+     * Sets the default show date.
+     *
+     * @param showDate show date to set
+     */
+    public void setDefaultShowDate(java.time.LocalDate showDate) {
+        defaultShowDate.set(showDate);
+        log.info("Default showDate updated in memory: '{}'", showDate);
+    }
+
+    /**
+     * @return the default show time if present
+     */
+    public Optional<java.time.LocalTime> getDefaultShowTime() {
+        return Optional.ofNullable(defaultShowTime.get());
+    }
+
+    /**
+     * Sets the default show time.
+     *
+     * @param showTime show time to set
+     */
+    public void setDefaultShowTime(java.time.LocalTime showTime) {
+        defaultShowTime.set(showTime);
+        log.info("Default showTime updated in memory: '{}'", showTime);
     }
 }

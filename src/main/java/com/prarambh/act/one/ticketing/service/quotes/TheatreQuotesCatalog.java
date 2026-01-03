@@ -10,7 +10,11 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-/** Loads theatre quotes from classpath:theatre-quotes.properties. */
+/**
+ * Loads theatre quotes from classpath:theatre-quotes.properties.
+ *
+ * <p>Quotes are expected to be defined as properties with keys starting with {@code quotes.}.
+ */
 @Component
 @Slf4j
 public class TheatreQuotesCatalog {
@@ -18,6 +22,9 @@ public class TheatreQuotesCatalog {
     @Getter
     private final List<TheatreQuote> quotes;
 
+    /**
+     * Construct and load quotes immediately.
+     */
     public TheatreQuotesCatalog() {
         this.quotes = Collections.unmodifiableList(load());
         log.info("event=theatre_quotes_loaded count={}", this.quotes.size());
@@ -54,4 +61,3 @@ public class TheatreQuotesCatalog {
         }
     }
 }
-

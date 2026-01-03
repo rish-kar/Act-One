@@ -1,8 +1,8 @@
 spring:
   datasource:
-    url: jdbc:postgresql://example.com/prod-db
-    username: prod_user
-    password: change-me
+    url: ${ACTONE_DB_URL:}
+    username: ${ACTONE_DB_USERNAME:}
+    password: ${ACTONE_DB_PASSWORD:}
   jpa:
     hibernate:
       ddl-auto: validate
@@ -15,4 +15,4 @@ spring:
 
 actone:
   admin:
-    purge-password: "prarambh-admin-delhi"
+    purge-password: ${ACTONE_ADMIN_PASSWORD:}

@@ -34,6 +34,12 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
     /** Header used to accept/return a request correlation id. */
     public static final String REQUEST_ID_HEADER = "X-Request-Id";
 
+    /**
+     * Sanitize a string for safe logging by removing control/newline characters.
+     *
+     * @param value input value
+     * @return sanitized string or null if input was null
+     */
     private static String sanitizeForLog(String value) {
         if (value == null) {
             return null;
@@ -42,6 +48,16 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
         return value.replace("\r", " ").replace("\n", " ");
     }
 
+    /**
+     * Log request entry and exit. Adds a request id header and stores it into MDC for the
+     * duration of the request so further logs can include the id.
+     *
+     * @param request incoming servlet request
+     * @param response servlet response
+     * @param filterChain rest of the filter chain
+     * @throws ServletException on servlet errors
+     * @throws IOException on I/O errors
+     */
     @Override
     protected void doFilterInternal(
             HttpServletRequest request,

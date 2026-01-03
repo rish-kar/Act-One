@@ -39,7 +39,7 @@ class AdminControllerIntegrationTest {
         // Set show name
         client.post().uri("/api/admin/show-name")
                 .header("X-Admin-Password", "prarambh-admin-delhi")
-                .bodyValue(Map.of("showName", "Admin Test Show"))
+                .bodyValue(Map.of("showName", "Admin Test Show", "showDate", "2025-12-31", "showTime", "18:00"))
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(Map.class)

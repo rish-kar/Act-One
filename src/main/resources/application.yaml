@@ -55,6 +55,9 @@ spring:
         ssl:
           trust: ${ACTONE_SMTP_SSL_TRUST:${ACTONE_SMTP_HOST:smtp.gmail.com}}
 
+  mvc:
+    throw-exception-if-no-handler-found: false
+
 logging:
   level:
     com.prarambh.act.one: INFO
@@ -66,7 +69,7 @@ logging:
 
 actone:
   admin:
-    purge-password: "prarambh-admin-delhi"
+    purge-password: ${ACTONE_ADMIN_PASSWORD:}
   email:
     enabled: ${ACTONE_EMAIL_ENABLED:true}
     subject: "Your ticket has been issued"
@@ -74,9 +77,9 @@ actone:
     from: ${ACTONE_EMAIL_FROM:${ACTONE_SMTP_USERNAME:}}
     bcc: ${ACTONE_EMAIL_BCC:}
   ticket-card:
-    enabled: true
-    outputDir: .
-    templateResource: "classpath:/static/Card.png"
+    enabled: ${ACTONE_TICKET_CARD_ENABLED:true}
+    outputDir: ${ACTONE_TICKET_CARD_OUTPUT_DIR:.}
+    templateResource: ${ACTONE_TICKET_CARD_TEMPLATE:classpath:/static/Card.png}
 
 management:
   endpoints:

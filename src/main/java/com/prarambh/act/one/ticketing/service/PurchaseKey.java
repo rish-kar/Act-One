@@ -7,6 +7,15 @@ package com.prarambh.act.one.ticketing.service;
  */
 public record PurchaseKey(String email, String phoneNumber, String showId, String showName) {
 
+    /**
+     * Build a PurchaseKey from the raw fields applying normalization.
+     *
+     * @param email purchaser email
+     * @param phoneNumber purchaser phone
+     * @param showId show id
+     * @param showName show name
+     * @return normalized PurchaseKey
+     */
     public static PurchaseKey from(String email, String phoneNumber, String showId, String showName) {
         return new PurchaseKey(
                 normalize(email),
@@ -20,4 +29,3 @@ public record PurchaseKey(String email, String phoneNumber, String showId, Strin
         return s == null ? null : s.trim().toLowerCase();
     }
 }
-

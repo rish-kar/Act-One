@@ -59,6 +59,13 @@ public class QuoteSelectionService {
         return chosen;
     }
 
+    /**
+     * Pick a random quote avoiding a specific key if possible.
+     *
+     * @param quotes list of quotes
+     * @param avoidKey key to avoid
+     * @return selected TheatreQuote
+     */
     private TheatreQuote pickRandomAvoiding(List<TheatreQuote> quotes, String avoidKey) {
         if (avoidKey == null || avoidKey.isBlank() || quotes.size() == 1) {
             return quotes.get(random.nextInt(quotes.size()));
@@ -81,6 +88,13 @@ public class QuoteSelectionService {
         return quotes.get(0);
     }
 
+    /**
+     * Find a quote by key or return a sensible fallback (first in list).
+     *
+     * @param key key to find
+     * @param quotes list of quotes
+     * @return matching quote or first element as fallback
+     */
     private TheatreQuote findByKeyOrFallback(String key, List<TheatreQuote> quotes) {
         if (key != null) {
             for (TheatreQuote q : quotes) {

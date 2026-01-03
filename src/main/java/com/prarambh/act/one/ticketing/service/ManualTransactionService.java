@@ -15,6 +15,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Implements the manual payment verification flow.
+ *
+ * <p>Supports recording transactions (made/pending), validating and issuing them by userId or
+ * transactionId, and performing check-in operations that operate on groups.
  */
 @Service
 @RequiredArgsConstructor
@@ -26,11 +29,23 @@ public class ManualTransactionService {
     private final TicketCheckInService ticketCheckInService;
     private final AuditoriumService auditoriumService;
 
+    /**
+     * Record a manual transaction (transaction made).
+     *
+     * @param req incoming request
+     * @return result containing userId and ticket count
+     */
     @Transactional
     public ManualTransactionResult recordTransaction(ManualTransactionController.RecordTransactionRequest req) {
         return recordTransactionInternal(req, TicketStatus.TRANSACTION_MADE);
     }
 
+    /**
+     * Record a manual transaction where payment is pending (cash pay at venue).
+     *
+     * @param req incoming request
+     * @return result with userId and ticket count
+     */
     @Transactional
     public ManualTransactionResult recordPendingTransaction(ManualTransactionController.RecordTransactionRequest req) {
         return recordTransactionInternal(req, TicketStatus.TRANSACTION_PENDING);
@@ -93,6 +108,12 @@ public class ManualTransactionService {
         return new ManualTransactionResult(userId, saved.size());
     }
 
+    /**
+     * Validate all pending/manual transactions for the given userId and mark them as ISSUED.
+     *
+     * @param userId user id
+     * @return list of tickets after issuing
+     */
     @Transactional
     public List<Ticket> validateTransactionAndIssueTickets(String userId) {
         List<Ticket> tickets = ticketRepository.findByUserId(userId);
@@ -124,6 +145,12 @@ public class ManualTransactionService {
         return issued;
     }
 
+    /**
+     * Validate and issue all tickets for the given transaction id.
+     *
+     * @param transactionId transaction id
+     * @return issued tickets
+     */
     @Transactional
     public List<Ticket> validateTransactionAndIssueTicketsByTransactionId(String transactionId) {
         if (transactionId == null || transactionId.isBlank()) {
@@ -155,6 +182,12 @@ public class ManualTransactionService {
         return issued;
     }
 
+    /**
+     * Check-in all tickets belonging to a transaction id.
+     *
+     * @param transactionId transaction id
+     * @return number of tickets updated to USED
+     */
     @Transactional
     public int checkInByTransactionId(String transactionId) {
         if (transactionId == null || transactionId.isBlank()) {
@@ -177,6 +210,12 @@ public class ManualTransactionService {
         return updated;
     }
 
+    /**
+     * Check-in all tickets for a user id.
+     *
+     * @param userId user id
+     * @return number of tickets updated
+     */
     @Transactional
     public int checkInByUserId(String userId) {
         List<Ticket> tickets = ticketRepository.findByUserId(userId);
@@ -197,6 +236,12 @@ public class ManualTransactionService {
         return updated;
     }
 
+    /**
+     * Normalize phone number keeping only last 10 digits.
+     *
+     * @param input raw phone input
+     * @return normalized 10-digit phone or null
+     */
     private static String normalizePhoneLast10(String input) {
         if (input == null) return null;
         String digits = input.replaceAll("\\D", "");
@@ -204,6 +249,11 @@ public class ManualTransactionService {
         return digits.substring(digits.length() - 10);
     }
 
+    /**
+     * Generate a short uppercase 8-char id used as fallback userId.
+     *
+     * @return 8-char uppercase id
+     */
     private static String shortUuid() {
         return UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
     }

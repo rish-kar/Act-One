@@ -12,6 +12,7 @@ CREATE TABLE tickets (
   ticket_id UUID PRIMARY KEY,
   show_id VARCHAR(255),
   show_name VARCHAR(255) NOT NULL,
+  auditorium_id VARCHAR(64),
   full_name VARCHAR(255) NOT NULL,
   email VARCHAR(255),
   phone_number VARCHAR(255) NOT NULL,
@@ -57,7 +58,9 @@ CREATE TABLE donations (
   phone_number VARCHAR(255),
   email VARCHAR(255),
   message VARCHAR(1024),
+  transaction_id VARCHAR(255) NOT NULL,
   amount DECIMAL(12,2) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT uk_donations_serial UNIQUE (serial_number)
 );
 
@@ -76,8 +79,10 @@ CREATE TABLE auditoriums (
   auditorium_id VARCHAR(64) PRIMARY KEY,
   auditorium_name VARCHAR(255) NOT NULL,
   show_id VARCHAR(255) NOT NULL,
+  show_name VARCHAR(255) NOT NULL,
   show_date DATE NOT NULL,
   show_time TIME NOT NULL,
+  ticket_amount DECIMAL(10,2) NOT NULL,
   total_seats INT NOT NULL,
   reserved_seats INT NOT NULL,
   booked_seats INT NOT NULL,
