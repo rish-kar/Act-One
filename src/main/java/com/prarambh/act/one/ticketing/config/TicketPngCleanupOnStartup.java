@@ -12,9 +12,11 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 
 /**
- * Deletes previously generated ticket PNGs in the project root on application startup.
+ * Deletes previously generated ticket PNGs in the configured output directory on application startup.
  *
- * <p>Only files matching {@code ticket-*.png} in the current working directory are deleted.
+ * <p>The directory used is {@link TicketCardProperties#outputDir()}. If not configured the current
+ * working directory is used. Only files matching {@code ticket-*.png} are removed. Failures are
+ * logged but do not prevent the application from starting.
  */
 @Component
 @Slf4j
@@ -26,6 +28,12 @@ public class TicketPngCleanupOnStartup implements ApplicationRunner {
         this.ticketCardProperties = ticketCardProperties;
     }
 
+    /**
+     * Run the cleanup at startup. This method will iterate the configured output directory and
+     * delete files matching the glob {@code ticket-*.png}.
+     *
+     * @param args application arguments (ignored)
+     */
     @Override
     public void run(ApplicationArguments args) {
         // Resolve the same output directory used by TicketCardGenerator.

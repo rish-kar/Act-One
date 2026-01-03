@@ -27,7 +27,11 @@ public class TicketIssuedEmailListener {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onTicketIssued(TicketIssuedEvent event) {
         // Disabled: avoid sending one email per ticket row.
-        log.debug("event=ticket_issue_email_skipped reason=use_purchase_email_listener ticketId={}", event.ticket().getTicketId());
+        // The event now contains a list; log the first ticket id if present.
+        var firstId = event.getTickets() == null || event.getTickets().isEmpty()
+                ? null
+                : event.getTickets().get(0).getTicketId();
+        log.debug("event=ticket_issue_email_skipped reason=use_purchase_email_listener ticketId={}", firstId);
     }
 
     private String buildBody(Ticket t) {

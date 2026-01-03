@@ -34,6 +34,10 @@ public class Donation {
     @Column(name = "message", nullable = true)
     private String message;
 
+    /** Payment/transaction reference for this donation (required). */
+    @Column(name = "transaction_id", nullable = false)
+    private String transactionId;
+
     @Column(name = "amount", nullable = false, precision = 10, scale = 2)
     private BigDecimal amount;
 
@@ -69,10 +73,12 @@ public class Donation {
     public String getMessage() { return message; }
     public void setMessage(String message) { this.message = message; }
 
+    public String getTransactionId() { return transactionId; }
+    public void setTransactionId(String transactionId) { this.transactionId = transactionId; }
+
     public BigDecimal getAmount() { return amount; }
     public void setAmount(BigDecimal amount) { this.amount = amount; }
 
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
 }
-

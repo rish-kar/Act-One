@@ -27,9 +27,12 @@ public final class ShowIdGenerator {
      * @return generated show id
      */
     public static String fromShowName(String showName) {
-        String normalized = normalize(showName);
-        String slug = toSlug(normalized);
-        String hash = crcBase36(normalized);
+        if (showName == null || showName.isBlank()) {
+            return null;
+        }
+        String n = normalize(showName);
+        String slug = toSlug(n);
+        String hash = crcBase36(n);
         return "SHOW-" + slug + "-" + hash;
     }
 

@@ -27,7 +27,7 @@ logging:
     com.prarambh.act.one: INFO
 actone:
   admin:
-    purge-password: "prarambh-admin-delhi"
+    purge-password: ${ACTONE_ADMIN_PASSWORD:prarambh-admin-delhi}
   email:
     enabled: false
     bcc: ""

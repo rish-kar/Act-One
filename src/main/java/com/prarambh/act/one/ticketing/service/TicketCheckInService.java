@@ -12,7 +12,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Service responsible for check-in so we can trigger side effects (emails) consistently.
+ * Service responsible for performing ticket check-ins and triggering related side-effects.
+ *
+ * <p>Encapsulates the check-in logic and publishes {@link TicketPurchaseCheckedInEvent} when an
+ * entire purchase group is fully used.
  */
 @Service
 @RequiredArgsConstructor
@@ -23,6 +26,16 @@ public class TicketCheckInService {
     private final ApplicationEventPublisher eventPublisher;
     private final AuditoriumService auditoriumService;
 
+    /**
+     * Marks a ticket referenced by its QR code id as used (checked-in).
+     *
+     * <p>If the ticket does not exist, {@link Optional#empty()} is returned. If it already was
+     * marked as USED, the ticket is returned unchanged. When the operation results in the last
+     * ticket of a grouped purchase being used, a {@link TicketPurchaseCheckedInEvent} is published.
+     *
+     * @param qrCodeId identifier printed on the ticket QR/barcode
+     * @return optional of the persisted ticket after the operation
+     */
     @Transactional
     public Optional<Ticket> checkInByBarcode(String qrCodeId) {
         Optional<Ticket> ticketOpt = ticketRepository.findByQrCodeId(qrCodeId);

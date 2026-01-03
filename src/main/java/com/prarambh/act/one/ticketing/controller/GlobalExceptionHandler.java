@@ -4,6 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -39,7 +40,10 @@ public class GlobalExceptionHandler {
         }
         body.put("errors", errors);
 
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+        // Ensure JSON content type is used even if the original handler declared another produced type
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body);
     }
 
     /**
@@ -54,6 +58,7 @@ public class GlobalExceptionHandler {
             log.debug("Static resource not found: {}", ex.getResourcePath());
         }
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .contentType(MediaType.APPLICATION_JSON)
                 .body(Map.of("message", "Resource not found"));
     }
 
@@ -63,7 +68,9 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<?> handleGeneric(Exception ex) {
         log.error("Unhandled exception type={} message={}", ex.getClass().getName(), ex.getMessage(), ex);
+        // Ensure JSON content type is explicitly used so converters pick the correct writer
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .contentType(MediaType.APPLICATION_JSON)
                 .body(Map.of("message", "Internal server error"));
     }
 }

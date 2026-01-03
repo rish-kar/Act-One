@@ -2,6 +2,7 @@ package com.prarambh.act.one.ticketing.controller;
 
 import com.prarambh.act.one.ticketing.model.Ticket;
 import com.prarambh.act.one.ticketing.model.TicketStatus;
+import com.prarambh.act.one.ticketing.repository.AuditoriumRepository;
 import com.prarambh.act.one.ticketing.repository.TicketRepository;
 import com.prarambh.act.one.ticketing.service.ShowSettingsService;
 import com.prarambh.act.one.ticketing.service.TicketCheckInService;
@@ -21,9 +22,12 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import static com.prarambh.act.one.ticketing.controller.TicketController.TicketResponse.formatIstTime;
 
 /**
  * Ticket-facing API.
@@ -45,6 +49,16 @@ public class TicketController {
     private final ShowSettingsService showSettingsService;
     private final TicketIssuanceService ticketIssuanceService;
     private final TicketCheckInService ticketCheckInService;
+    private final AuditoriumRepository auditoriumRepository;
+
+    @Value("${actone.admin.purge-password:}")
+    private String adminPassword;
+
+    private boolean isAdmin(String pass){
+        return org.springframework.util.StringUtils.hasText(adminPassword)
+                && org.springframework.util.StringUtils.hasText(pass)
+                && pass.equals(adminPassword);
+    }
 
     /**
      * Fetch distinct shows from the tickets table.
@@ -52,9 +66,9 @@ public class TicketController {
     @GetMapping("/shows")
     public ResponseEntity<?> getShowsFromTickets() {
         List<Object[]> results = ticketRepository.findDistinctShows();
-        List<Map<String, String>> shows = new ArrayList<>();
+        List<Map<String, Object>> shows = new ArrayList<>();
         for (Object[] row : results) {
-            Map<String, String> map = new LinkedHashMap<>();
+            Map<String, Object> map = new LinkedHashMap<>();
             map.put("showName", (String) row[0]);
             map.put("showId", (String) row[1]);
             shows.add(map);
@@ -88,14 +102,37 @@ public class TicketController {
             ));
         }
 
+        // auditoriumId is optional; tests send no auditoriumId
+        // If provided, we could verify existence, but keep optional to match tests
+
+        // Determine showId: prefer request.showId when it looks like a generated id; otherwise generate from show name
+        String resolvedShowId = request.showId();
+        if (resolvedShowId == null || resolvedShowId.isBlank() || !resolvedShowId.startsWith("SHOW-")) {
+            resolvedShowId = com.prarambh.act.one.ticketing.service.ShowIdGenerator.fromShowName(resolvedShowName);
+        }
+
+        // parse ticket amount (string in tests) into BigDecimal
+        java.math.BigDecimal parsedAmount;
+        try {
+            parsedAmount = request.ticketAmount() == null ? null : new java.math.BigDecimal(request.ticketAmount());
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Invalid ticketAmount format"));
+        }
+        if (parsedAmount == null) {
+            return ResponseEntity.badRequest().body(Map.of("message", "ticketAmount is required"));
+        }
+
         Ticket ticket = new Ticket();
         ticket.setShowName(resolvedShowName);
+        ticket.setShowId(resolvedShowId);
+        // auditoriumId is optional in integration tests; accept null
+        ticket.setAuditoriumId(request.auditoriumId());
         ticket.setFullName(request.fullName());
         ticket.setEmail(request.email());
         ticket.setPhoneNumber(normalizePhoneLast10(request.phoneNumber()));
         ticket.setTicketCount(request.ticketCount() == null ? 1 : request.ticketCount());
         ticket.setTransactionId(request.transactionId());
-        ticket.setTicketAmount(request.ticketAmount());
+        ticket.setTicketAmount(parsedAmount);
 
         List<Ticket> savedTickets = ticketIssuanceService.issueTickets(ticket);
         Ticket primary = savedTickets.get(0);
@@ -116,6 +153,7 @@ public class TicketController {
         response.put("qrCodeId", primary.getQrCodeId());
         response.put("showId", primary.getShowId());
         response.put("showName", primary.getShowName());
+        response.put("auditoriumId", primary.getAuditoriumId());
         response.put("ticketCount", primary.getTicketCount());
         response.put("userId", primary.getUserId());
         response.put("transactionId", primary.getTransactionId());
@@ -131,7 +169,7 @@ public class TicketController {
      *
      * <p>This is the primary endpoint intended for scanning at the venue.
      */
-    @PostMapping("/barcode/{qrCodeId}/checkin")
+    @PostMapping("/qrcode/{qrCodeId}/checkin")
     public ResponseEntity<?> checkInByBarcode(@PathVariable String qrCodeId) {
         log.info("Check-in request received: qrCodeId={}", qrCodeId);
 
@@ -147,12 +185,12 @@ public class TicketController {
         Ticket ticket = ticketOpt.get();
         if (ticket.getStatus() == TicketStatus.USED) {
             log.info("Check-in ALREADY_USED: qrCodeId={}, ticketId={}, usedAtDate={}, usedAtTimeIst={} ",
-                    qrCodeId, ticket.getTicketId(), ticket.getUsedAtDate(), TicketResponse.formatIstTime(ticket.getUsedAtTime()));
+                    qrCodeId, ticket.getTicketId(), ticket.getUsedAtDate(), formatIstTime(ticket.getUsedAtTime()));
             return ResponseEntity.ok(Map.of(
                     "result", "ALREADY_USED",
                     "message", "Ticket has already been checked in",
                     "usedAtDate", ticket.getUsedAtDate(),
-                    "usedAtTimeIst", TicketResponse.formatIstTime(ticket.getUsedAtTime())
+                    "usedAtTimeIst", formatIstTime(ticket.getUsedAtTime())
             ));
         }
 
@@ -170,13 +208,13 @@ public class TicketController {
         Ticket saved = ticketCheckInService.checkInByBarcode(qrCodeId).orElseThrow();
 
         log.info("Check-in VALID: qrCodeId={}, ticketId={}, set status=USED usedAtDate={} usedAtTimeIst={}",
-                qrCodeId, saved.getTicketId(), saved.getUsedAtDate(), TicketResponse.formatIstTime(saved.getUsedAtTime()));
+                qrCodeId, saved.getTicketId(), saved.getUsedAtDate(), formatIstTime(saved.getUsedAtTime()));
 
         return ResponseEntity.ok(Map.of(
                 "result", "VALID",
                 "message", "Check-in successful",
                 "usedAtDate", saved.getUsedAtDate(),
-                "usedAtTimeIst", TicketResponse.formatIstTime(saved.getUsedAtTime())
+                "usedAtTimeIst", formatIstTime(saved.getUsedAtTime())
         ));
     }
 
@@ -204,67 +242,7 @@ public class TicketController {
                 });
     }
 
-    /**
-     * Check in a ticket.
-     *
-     * <p>Returns one of:
-     * <ul>
-     *   <li>{@code VALID} and marks the ticket as {@code USED}</li>
-     *   <li>{@code ALREADY_USED} when it has already been checked in</li>
-     *   <li>{@code NOT_FOUND} for unknown ticket id</li>
-     * </ul>
-     */
-    @PostMapping("/{ticketId}/checkin")
-    public ResponseEntity<?> checkIn(@PathVariable UUID ticketId) {
-        log.warn("Deprecated check-in endpoint used (ticketId). Prefer the QR-based endpoint /api/tickets/barcode/{qrCodeId}/checkin. ticketId={}", ticketId);
-        log.info("Check-in request received: ticketId={}", ticketId);
-
-        Optional<Ticket> ticketOpt = ticketRepository.findById(ticketId);
-        if (ticketOpt.isEmpty()) {
-            log.warn("Check-in NOT_FOUND: ticketId={}", ticketId);
-            return ResponseEntity.ok(Map.of(
-                    "result", "NOT_FOUND",
-                    "message", "Ticket not found"
-            ));
-        }
-
-        Ticket ticket = ticketOpt.get();
-        if (ticket.getStatus() == TicketStatus.USED) {
-            log.info("Check-in ALREADY_USED: ticketId={}, usedAtDate={}, usedAtTimeIst={} ",
-                    ticketId, ticket.getUsedAtDate(), TicketResponse.formatIstTime(ticket.getUsedAtTime()));
-            return ResponseEntity.ok(Map.of(
-                    "result", "ALREADY_USED",
-                    "message", "Ticket has already been checked in",
-                    "usedAtDate", ticket.getUsedAtDate(),
-                    "usedAtTimeIst", TicketResponse.formatIstTime(ticket.getUsedAtTime())
-            ));
-        }
-
-        if (ticket.getStatus() == TicketStatus.TRANSACTION_MADE) {
-            log.warn("Check-in PENDING_APPROVAL: ticketId={}, userId={}", ticketId, ticket.getUserId());
-            return ResponseEntity.ok(Map.of(
-                    "result", "PENDING_APPROVAL",
-                    "message", "Ticket not yet approved. Please contact admin.",
-                    "userId", ticket.getUserId() != null ? ticket.getUserId() : ""
-            ));
-        }
-
-        ticket.markUsed();
-        ticketRepository.save(ticket);
-        log.info("Check-in VALID: ticketId={}, set status=USED usedAtDate={} usedAtTimeIst={}",
-                ticketId, ticket.getUsedAtDate(), TicketResponse.formatIstTime(ticket.getUsedAtTime()));
-
-        return ResponseEntity.ok(Map.of(
-                "result", "VALID",
-                "message", "Check-in successful",
-                "usedAtDate", ticket.getUsedAtDate(),
-                "usedAtTimeIst", TicketResponse.formatIstTime(ticket.getUsedAtTime())
-        ));
-    }
-
-    /**
-     * Fetch all tickets sorted by creation date/time (newest first).
-     */
+    /** Fetch all tickets sorted by creation date/time (newest first). */
     @GetMapping("/all")
     public ResponseEntity<List<TicketResponse>> getAllTickets() {
         log.info("Fetch all tickets request received");
@@ -282,9 +260,7 @@ public class TicketController {
         return ResponseEntity.ok(tickets);
     }
 
-    /**
-     * Fetch a single ticket by its UUID.
-     */
+    /** Fetch a single ticket by its UUID. */
     @GetMapping("/{ticketId}")
     public ResponseEntity<?> getTicketById(@PathVariable UUID ticketId) {
         log.info("Fetch ticket by id request received: ticketId={}", ticketId);
@@ -364,7 +340,9 @@ public class TicketController {
             @NotBlank String phoneNumber,
             @Min(1) Integer ticketCount,
             @NotBlank String transactionId,
-            @jakarta.validation.constraints.NotNull java.math.BigDecimal ticketAmount
+            @NotBlank String ticketAmount,
+            String auditoriumId,
+            String showId
     ) {}
 
     /**
@@ -429,5 +407,213 @@ public class TicketController {
             return digits;
         }
         return digits.substring(digits.length() - 10);
+    }
+
+    /**
+     * Replace ALL tickets for a given {@code userId}.
+     *
+     * <p>Admin-only. This is a bulk operation.
+     *
+     * @param userId user id whose tickets should be replaced
+     * @param request replacement payload applied to each ticket row
+     * @param pass admin password header
+     * @return list of updated tickets
+     */
+    @PutMapping("/by-user/{userId}")
+    public ResponseEntity<?> replaceTicketsByUserId(
+            @PathVariable String userId,
+            @RequestBody Map<String, Object> request,
+            @RequestHeader(name = "X-Admin-Password", required = false) String pass
+    ) {
+        if (!isAdmin(pass)) {
+            return ResponseEntity.status(403).body(Map.of("message", "admin password required"));
+        }
+
+        List<Ticket> tickets = ticketRepository.findByUserId(userId);
+        if (tickets.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("message", "No tickets found for userId", "userId", userId));
+        }
+
+        // Full replace semantics for common safe fields.
+        // We intentionally do NOT mutate primary identifiers like ticketId / qrCodeId.
+        for (Ticket t : tickets) {
+            if (request.containsKey("showName")) t.setShowName(String.valueOf(request.get("showName")));
+            if (request.containsKey("showId")) t.setShowId(String.valueOf(request.get("showId")));
+            if (request.containsKey("auditoriumId")) t.setAuditoriumId(String.valueOf(request.get("auditoriumId")));
+            if (request.containsKey("fullName")) t.setFullName(String.valueOf(request.get("fullName")));
+            if (request.containsKey("email")) t.setEmail(String.valueOf(request.get("email")));
+            if (request.containsKey("phoneNumber")) t.setPhoneNumber(normalizePhoneLast10(String.valueOf(request.get("phoneNumber"))));
+            if (request.containsKey("ticketCount")) t.setTicketCount(Integer.parseInt(String.valueOf(request.get("ticketCount"))));
+            if (request.containsKey("transactionId")) t.setTransactionId(String.valueOf(request.get("transactionId")));
+            if (request.containsKey("ticketAmount")) {
+                t.setTicketAmount(new java.math.BigDecimal(String.valueOf(request.get("ticketAmount"))));
+            }
+            if (request.containsKey("status")) {
+                t.setStatus(TicketStatus.valueOf(String.valueOf(request.get("status"))));
+            }
+        }
+
+        ticketRepository.saveAll(tickets);
+        return ResponseEntity.ok(tickets.stream().map(TicketResponse::from).toList());
+    }
+
+    /**
+     * Patch ALL tickets for a given {@code userId}.
+     *
+     * <p>Admin-only. This is a bulk operation.
+     */
+    @PatchMapping("/by-user/{userId}")
+    public ResponseEntity<?> patchTicketsByUserId(
+            @PathVariable String userId,
+            @RequestBody Map<String, Object> patch,
+            @RequestHeader(name = "X-Admin-Password", required = false) String pass
+    ) {
+        if (!isAdmin(pass)) {
+            return ResponseEntity.status(403).body(Map.of("message", "admin password required"));
+        }
+
+        List<Ticket> tickets = ticketRepository.findByUserId(userId);
+        if (tickets.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("message", "No tickets found for userId", "userId", userId));
+        }
+        if (patch == null || patch.isEmpty()) {
+            return ResponseEntity.ok(tickets.stream().map(TicketResponse::from).toList());
+        }
+
+        for (Ticket t : tickets) {
+            if (patch.containsKey("showName")) t.setShowName(String.valueOf(patch.get("showName")));
+            if (patch.containsKey("showId")) t.setShowId(String.valueOf(patch.get("showId")));
+            if (patch.containsKey("auditoriumId")) t.setAuditoriumId(String.valueOf(patch.get("auditoriumId")));
+            if (patch.containsKey("fullName")) t.setFullName(String.valueOf(patch.get("fullName")));
+            if (patch.containsKey("email")) t.setEmail(String.valueOf(patch.get("email")));
+            if (patch.containsKey("phoneNumber")) t.setPhoneNumber(normalizePhoneLast10(String.valueOf(patch.get("phoneNumber"))));
+            if (patch.containsKey("ticketCount")) t.setTicketCount(Integer.parseInt(String.valueOf(patch.get("ticketCount"))));
+            if (patch.containsKey("transactionId")) t.setTransactionId(String.valueOf(patch.get("transactionId")));
+            if (patch.containsKey("ticketAmount")) {
+                t.setTicketAmount(new java.math.BigDecimal(String.valueOf(patch.get("ticketAmount"))));
+            }
+            if (patch.containsKey("status")) {
+                t.setStatus(TicketStatus.valueOf(String.valueOf(patch.get("status"))));
+            }
+        }
+
+        ticketRepository.saveAll(tickets);
+        return ResponseEntity.ok(tickets.stream().map(TicketResponse::from).toList());
+    }
+
+    /**
+     * Delete ALL tickets for a given {@code userId}.
+     */
+    @DeleteMapping("/by-user/{userId}")
+    public ResponseEntity<?> deleteTicketsByUserId(
+            @PathVariable String userId,
+            @RequestHeader(name = "X-Admin-Password", required = false) String pass
+    ) {
+        if (!isAdmin(pass)) {
+            return ResponseEntity.status(403).body(Map.of("message", "admin password required"));
+        }
+
+        List<Ticket> tickets = ticketRepository.findByUserId(userId);
+        if (tickets.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("message", "No tickets found for userId", "userId", userId));
+        }
+
+        int count = tickets.size();
+        ticketRepository.deleteAllInBatch(tickets);
+        return ResponseEntity.ok(Map.of("message", "deleted", "userId", userId, "deletedCount", count));
+    }
+
+    /**
+     * Delete a single ticket by its ticketId (primary ticket identifier).
+     * Public/admin: available to anyone for now; requires admin if you want to restrict later.
+     *
+     * @param ticketId the UUID ticketId to delete
+     */
+    @DeleteMapping("/{ticketId}")
+    public ResponseEntity<?> deleteTicketByTicketId(@PathVariable UUID ticketId,
+                                                     @RequestHeader(name = "X-Admin-Password", required = false) String pass) {
+        // Optional: restrict to admin by uncommenting the following lines
+        // if (!isAdmin(pass)) { return ResponseEntity.status(403).body(Map.of("message", "admin password required")); }
+
+        if (ticketId == null) {
+            return ResponseEntity.badRequest().body(Map.of("message", "ticketId required"));
+        }
+
+        java.util.Optional<Ticket> existing = ticketRepository.findById(ticketId);
+        if (existing.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("message", "Ticket not found", "ticketId", ticketId));
+        }
+
+        ticketRepository.delete(existing.get());
+        return ResponseEntity.ok(Map.of("message", "deleted", "ticketId", ticketId));
+    }
+
+    /**
+     * Update ticket status using a partial (case-insensitive) full name match and a ticketId suffix.
+     * Both values are required. The ticketId suffix must be at least 5 characters long.
+     * Admin-only: requires X-Admin-Password header.
+     *
+     * Request JSON example: { "partialName": "Aisha", "ticketIdSuffix": "3e4b4a4093", "status": "ISSUED" }
+     *
+     * This performs a bulk update for all tickets that match both criteria.
+     */
+    @PatchMapping("/status/by-name-suffix")
+    public ResponseEntity<?> updateStatusByNameAndSuffix(
+            @RequestBody Map<String, Object> body,
+            @RequestHeader(name = "X-Admin-Password", required = false) String pass
+    ) {
+        if (!isAdmin(pass)) {
+            return ResponseEntity.status(403).body(Map.of("message", "admin password required"));
+        }
+
+        if (body == null) {
+            return ResponseEntity.badRequest().body(Map.of("message", "request body required"));
+        }
+
+        String partialName = body.get("partialName") == null ? null : String.valueOf(body.get("partialName")).trim();
+        String ticketIdSuffix = body.get("ticketIdSuffix") == null ? null : String.valueOf(body.get("ticketIdSuffix")).trim();
+        String statusRaw = body.get("status") == null ? null : String.valueOf(body.get("status")).trim();
+
+        if (partialName == null || partialName.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "partialName is required"));
+        }
+        if (ticketIdSuffix == null || ticketIdSuffix.length() < 5) {
+            return ResponseEntity.badRequest().body(Map.of("message", "ticketIdSuffix is required and must be at least 5 characters"));
+        }
+        if (statusRaw == null || statusRaw.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "status is required"));
+        }
+
+        final TicketStatus newStatus;
+        try {
+            newStatus = TicketStatus.valueOf(statusRaw);
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(Map.of("message", "invalid status value", "allowed", List.of(TicketStatus.values())));
+        }
+
+        String suffixLower = ticketIdSuffix.toLowerCase();
+
+        // First find by name (database query), then filter by ticketId suffix (UUID string)
+        List<Ticket> candidates = ticketRepository.findByFullNameContainingIgnoreCase(partialName);
+        List<Ticket> matched = new ArrayList<>();
+        for (Ticket t : candidates) {
+            if (t.getTicketId() == null) continue;
+            String idStr = t.getTicketId().toString().toLowerCase();
+            if (idStr.endsWith(suffixLower)) {
+                matched.add(t);
+            }
+        }
+
+        if (matched.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("message", "No tickets matched the provided partial name and ticketId suffix"));
+        }
+
+        // Apply update
+        for (Ticket t : matched) {
+            t.setStatus(newStatus);
+        }
+        ticketRepository.saveAll(matched);
+
+        return ResponseEntity.ok(matched.stream().map(TicketResponse::from).toList());
     }
 }

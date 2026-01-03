@@ -32,6 +32,7 @@ class DonationControllerIntegrationTest {
                 "phoneNumber", "9999999999",
                 "email", "donor@example.com",
                 "message", "Keep it up",
+                "transactionId", "DN-TXN-TEST-1",
                 "amount", 100.50
         );
 
@@ -53,7 +54,7 @@ class DonationControllerIntegrationTest {
     void createDonation_failsWhenMissingRequiredFields() {
         Map<String, Object> payload = Map.of(
                 "phoneNumber", "9999999999"
-                // missing fullName and amount
+                // missing fullName, transactionId and amount
         );
 
         client.post().uri("/api/donations")
@@ -66,7 +67,7 @@ class DonationControllerIntegrationTest {
     void listAndGetDonations() {
         // Create one
         Map created = client.post().uri("/api/donations")
-                .bodyValue(Map.of("fullName", "Donor Two", "amount", 50.0))
+                .bodyValue(Map.of("fullName", "Donor Two", "transactionId", "DN-TXN-TEST-2", "amount", 50.0))
                 .exchange()
                 .expectStatus().isCreated()
                 .expectBody(Map.class)
@@ -97,7 +98,7 @@ class DonationControllerIntegrationTest {
     void deleteDonation_requiresAdmin() {
         // Create one
         Map created = client.post().uri("/api/donations")
-                .bodyValue(Map.of("fullName", "Donor Del", "amount", 10.0))
+                .bodyValue(Map.of("fullName", "Donor Del", "transactionId", "DN-TXN-TEST-3", "amount", 10.0))
                 .exchange()
                 .expectStatus().isCreated()
                 .expectBody(Map.class)

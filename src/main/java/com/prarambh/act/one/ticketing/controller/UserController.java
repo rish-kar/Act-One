@@ -2,10 +2,9 @@ package com.prarambh.act.one.ticketing.controller;
 
 import com.prarambh.act.one.ticketing.model.User;
 import com.prarambh.act.one.ticketing.service.UserService;
-import java.util.List;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -20,11 +19,17 @@ import org.springframework.web.bind.annotation.RestController;
 public class UserController {
 
     private final UserService service;
-    private final String adminPassword = System.getenv().getOrDefault("ADMIN_PASSWORD","prarambh-admin-delhi");
+
+    @Value("${actone.admin.purge-password:}")
+    private String adminPassword;
 
     public UserController(UserService service) { this.service = service; }
 
-    private boolean isAdmin(String pass){ return org.springframework.util.StringUtils.hasText(pass) && pass.equals(adminPassword); }
+    private boolean isAdmin(String pass){
+        return org.springframework.util.StringUtils.hasText(adminPassword)
+                && org.springframework.util.StringUtils.hasText(pass)
+                && pass.equals(adminPassword);
+    }
 
     @PostMapping("/api/users")
     public ResponseEntity<?> create(@RequestBody User u, @RequestHeader(name = "X-Admin-Password", required = false) String pass){

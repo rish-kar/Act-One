@@ -31,6 +31,11 @@ public class TicketPurchaseEmailListener {
     private final TicketCardGenerator ticketCardGenerator;
     private final QuoteSelectionService quoteSelectionService;
 
+    /**
+     * Listener that sends an email after tickets are issued. Runs asynchronously after commit.
+     *
+     * @param event purchase issued event
+     */
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onPurchaseIssued(TicketPurchaseIssuedEvent event) {
@@ -39,7 +44,7 @@ public class TicketPurchaseEmailListener {
             return;
         }
 
-        List<Ticket> tickets = event.tickets();
+        List<Ticket> tickets = event.getTickets();
         if (tickets == null || tickets.isEmpty()) {
             log.debug("event=purchase_issue_email_skipped reason=no_tickets");
             return;
@@ -74,6 +79,11 @@ public class TicketPurchaseEmailListener {
         emailSender.send(to, subject, buildIssuedBody(tickets), attachments);
     }
 
+    /**
+     * Listener that sends check-in confirmation emails after a purchase group is fully used.
+     *
+     * @param event check-in event
+     */
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onPurchaseCheckedIn(TicketPurchaseCheckedInEvent event) {
@@ -82,7 +92,7 @@ public class TicketPurchaseEmailListener {
             return;
         }
 
-        List<Ticket> tickets = event.tickets();
+        List<Ticket> tickets = event.getTickets();
         if (tickets == null || tickets.isEmpty()) {
             log.debug("event=purchase_checkin_email_skipped reason=no_tickets");
             return;

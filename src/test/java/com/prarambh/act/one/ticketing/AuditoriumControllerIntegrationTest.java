@@ -31,10 +31,11 @@ class AuditoriumControllerIntegrationTest {
         // forbidden without admin
         client.post().uri("/api/auditoriums")
                 .bodyValue(Map.of(
-                        "showId", "SHOW-TEST-1",
                         "auditoriumName", "Main Auditorium",
+                        "showName", "Test Show",
                         "showDate", LocalDate.now().toString(),
                         "showTime", LocalTime.of(19,0).toString(),
+                        "ticketAmount", 750,
                         "totalSeats", 100,
                         "reservedSeats", 10
                 ))
@@ -43,10 +44,11 @@ class AuditoriumControllerIntegrationTest {
         Map created = client.post().uri("/api/auditoriums")
                 .header("X-Admin-Password", "prarambh-admin-delhi")
                 .bodyValue(Map.of(
-                        "showId", "SHOW-TEST-1",
                         "auditoriumName", "Main Auditorium",
+                        "showName", "Test Show",
                         "showDate", LocalDate.now().toString(),
                         "showTime", LocalTime.of(19,0).toString(),
+                        "ticketAmount", 750,
                         "totalSeats", 100,
                         "reservedSeats", 10
                 ))
@@ -78,10 +80,11 @@ class AuditoriumControllerIntegrationTest {
         Map created = client.post().uri("/api/auditoriums")
                 .header("X-Admin-Password", "prarambh-admin-delhi")
                 .bodyValue(Map.of(
-                        "showId", "SHOW-DEL-1",
                         "auditoriumName", "Delete Me",
+                        "showName", "Delete Show",
                         "showDate", LocalDate.now().toString(),
                         "showTime", LocalTime.of(10,0).toString(),
+                        "ticketAmount", 100,
                         "totalSeats", 50,
                         "reservedSeats", 0
                 ))

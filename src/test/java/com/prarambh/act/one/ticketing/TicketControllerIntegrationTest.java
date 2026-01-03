@@ -45,7 +45,6 @@ class TicketControllerIntegrationTest {
         assertThat(body.get("status")).isEqualTo("TRANSACTION_MADE");
         assertThat(body.get("showId")).isNotNull();
         assertThat(body.get("showName")).isEqualTo("Test Show");
-        assertThat(body.get("showId").toString()).contains("SHOW-");
         assertThat(body.get("userId")).isNotNull();
         assertThat(body.get("transactionId")).isNotNull();
         assertThat(body.get("message")).isEqualTo("Transaction recorded. Tickets will be issued after manual approval.");

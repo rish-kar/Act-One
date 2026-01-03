@@ -13,6 +13,15 @@ import org.springframework.stereotype.Service;
 
 /**
  * Sends emails via SMTP using Spring's JavaMailSender.
+ *
+ * <p>This service composes and sends plain-text emails (and emails with attachments) using the
+ * configured JavaMailSender. It performs basic validation of SMTP configuration and message
+ * recipients before attempting to send messages. The implementation attempts to use UTF-8 as the
+ * message charset and normalizes certain unicode characters that are known to be problematic when
+ * passing through intermediate mail systems.
+ *
+ * <p>Logging: detailed events are logged for successful sends and failures. Sensitive values such as
+ * SMTP username and addresses are masked in logs.
  */
 @Service
 @RequiredArgsConstructor
@@ -46,6 +55,18 @@ public class SmtpEmailSender implements EmailSender {
     @Value("${actone.email.bcc:}")
     private String configuredBcc;
 
+    /**
+     * Send a plain-text email to a single recipient.
+     *
+     * <p>The method validates that a recipient is provided and that SMTP host and authentication
+     * details (when required) are available. It sets the message subject and body ensuring UTF-8
+     * charset is used. If a configured BCC exists it will be applied. Errors are logged and do not
+     * throw exceptions to callers (send failures are recorded in logs).
+     *
+     * @param to destination email address. If null or blank the send is skipped.
+     * @param subject message subject; may be null.
+     * @param body plain-text message body; may be null.
+     */
     @Override
     public void send(String to, String subject, String body) {
         if (to == null || to.isBlank()) {
@@ -135,6 +156,19 @@ public class SmtpEmailSender implements EmailSender {
         }
     }
 
+    /**
+     * Send an email with attachments.
+     *
+     * <p>If the attachments list is null or empty this method delegates to {@link #send(String, String, String)}.
+     * The method validates SMTP configuration as in the plain send method and attaches files that exist
+     * on the filesystem. Missing files are skipped with a warning. The helper will set the message to
+     * multipart so attachments are delivered correctly.
+     *
+     * @param to destination email address. If null or blank the send is skipped.
+     * @param subject message subject; may be null.
+     * @param body message body; may be null.
+     * @param attachments list of attachments to include; elements may be null or contain null paths and will be skipped.
+     */
     @Override
     public void send(String to, String subject, String body, List<EmailAttachment> attachments) {
         if (attachments == null || attachments.isEmpty()) {
@@ -244,6 +278,13 @@ public class SmtpEmailSender implements EmailSender {
         }
     }
 
+    /**
+     * Mask an email address for logging output. The returned string hides part of the local
+     * portion for privacy.
+     *
+     * @param email the email address to mask; may be null.
+     * @return masked email or null if input was null/blank.
+     */
     private static String maskEmail(String email) {
         if (email == null || email.isBlank()) {
             return null;
@@ -255,6 +296,14 @@ public class SmtpEmailSender implements EmailSender {
         return email.charAt(0) + "***" + email.substring(at);
     }
 
+    /**
+     * Normalize a string to an ASCII-friendly representation by replacing characters that commonly
+     * become '?' when mail systems downgrade charset or perform lossy transforms. This helps
+     * preserve readable punctuation such as dashes and smart quotes.
+     *
+     * @param s input string; may be null.
+     * @return normalized string, or the original if null/empty.
+     */
     private static String normalizeToAscii(String s) {
         if (s == null || s.isEmpty()) {
             return s;
