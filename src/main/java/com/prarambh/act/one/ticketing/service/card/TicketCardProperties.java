@@ -7,10 +7,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record TicketCardProperties(
         /** If false, skip generation and attachments. */
         boolean enabled,
-        /** Output directory for generated PNGs. Defaults to project root ("."). */
+        /** Output directory for generated PNGs. Defaults to the OS temp directory if not set. */
         String outputDir,
         /** Classpath resource path to the template image. */
         String templateResource
 ) {
 }
-
