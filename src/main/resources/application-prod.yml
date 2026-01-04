@@ -1,0 +1,35 @@
+spring:
+  datasource:
+    url: ${DB_URL:?DB_URL env var is required}
+    username: ${DB_USERNAME:?DB_USERNAME env var is required}
+    password: ${DB_PASSWORD:?DB_PASSWORD env var is required}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      # Use 'update' to auto-create/update tables on startup
+      ddl-auto: update
+    properties:
+      hibernate:
+        default_schema: public
+        jdbc:
+          lob:
+            non_contextual_creation: true
+    open-in-view: false
+
+  # Never run seed / init SQL in prod.
+  sql:
+    init:
+      mode: never
+
+  h2:
+    console:
+      enabled: false
+
+  # Disable Flyway - Hibernate will manage schema
+  flyway:
+    enabled: false
+
+logging:
+  level:
+    org.hibernate.SQL: DEBUG

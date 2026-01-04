@@ -39,7 +39,7 @@ public class TicketPngCleanupOnStartup implements ApplicationRunner {
         // Resolve the same output directory used by TicketCardGenerator.
         String configured = ticketCardProperties.outputDir();
         Path root = (configured == null || configured.isBlank())
-                ? Paths.get(".").toAbsolutePath().normalize()
+                ? Paths.get(System.getProperty("java.io.tmpdir"), "actone-ticket-cards").toAbsolutePath().normalize()
                 : Paths.get(configured).toAbsolutePath().normalize();
 
         int deleted = 0;

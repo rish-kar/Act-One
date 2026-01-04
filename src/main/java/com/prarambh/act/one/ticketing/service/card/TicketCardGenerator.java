@@ -352,7 +352,11 @@ public class TicketCardGenerator {
     private Path resolveOutputDir() {
         String configured = properties.outputDir();
         if (configured == null || configured.isBlank()) {
-            return Paths.get(".").toAbsolutePath().normalize();
+            // Avoid writing generated files into the repo/app working directory by default.
+            // Use OS temp dir instead (safe for local dev and CI).
+            return Paths.get(System.getProperty("java.io.tmpdir"), "actone-ticket-cards")
+                    .toAbsolutePath()
+                    .normalize();
         }
         return Paths.get(configured).toAbsolutePath().normalize();
     }
