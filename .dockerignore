@@ -1,0 +1,27 @@
+# Build artifacts (Maven builds fresh inside Docker)
+target/
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+*.code-workspace
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Local files
+*.log
+*.tmp
+effective-pom
+_ls.txt
+
+# OS files
+.DS_Store
+Thumbs.db
+

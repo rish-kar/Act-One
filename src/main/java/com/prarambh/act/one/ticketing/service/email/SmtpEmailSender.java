@@ -3,7 +3,9 @@ package com.prarambh.act.one.ticketing.service.email;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
@@ -20,16 +22,26 @@ import org.springframework.stereotype.Service;
  * message charset and normalizes certain unicode characters that are known to be problematic when
  * passing through intermediate mail systems.
  *
+ * <p>If the first send attempt fails, a retry is scheduled after 120 seconds. Only one retry is attempted.
+ *
  * <p>Logging: detailed events are logged for successful sends and failures. Sensitive values such as
  * SMTP username and addresses are masked in logs.
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class SmtpEmailSender implements EmailSender {
 
+    private static final int RETRY_DELAY_SECONDS = 120;
+    private static final int MAX_ATTEMPTS = 3;
+
     private final org.springframework.mail.javamail.JavaMailSender mailSender;
     private final EmailProperties emailProperties;
+    private final ScheduledExecutorService retryScheduler = Executors.newSingleThreadScheduledExecutor();
+
+    public SmtpEmailSender(org.springframework.mail.javamail.JavaMailSender mailSender, EmailProperties emailProperties) {
+        this.mailSender = mailSender;
+        this.emailProperties = emailProperties;
+    }
 
     @Value("${spring.mail.host:}")
     private String host;
@@ -63,42 +75,53 @@ public class SmtpEmailSender implements EmailSender {
      * charset is used. If a configured BCC exists it will be applied. Errors are logged and do not
      * throw exceptions to callers (send failures are recorded in logs).
      *
+     * <p>If the first attempt fails, a retry is scheduled after 120 seconds.
+     *
      * @param to destination email address. If null or blank the send is skipped.
      * @param subject message subject; may be null.
      * @param body plain-text message body; may be null.
      */
     @Override
     public void send(String to, String subject, String body) {
+        doSendPlain(to, subject, body, 1);
+    }
+
+    private void doSendPlain(String to, String subject, String body, int attempt) {
         if (to == null || to.isBlank()) {
-            log.info("event=email_send_skipped reason=missing_to");
+            log.info("event=email_send_skipped reason=missing_to attempt={}", attempt);
             return;
         }
 
         if (host == null || host.isBlank()) {
-            log.error("event=email_send_failed reason=smtp_host_missing to={} subject={}", to, subject);
+            log.error("event=email_send_failed reason=smtp_host_missing to={} subject={} attempt={}", to, subject, attempt);
             return;
         }
 
         if (smtpAuth) {
             if (smtpUsername == null || smtpUsername.isBlank()) {
-                log.error("event=email_send_failed reason=smtp_username_missing smtpHost={} smtpPort={} to={} subject={}", host, port, to, subject);
+                log.error("event=email_send_failed reason=smtp_username_missing smtpHost={} smtpPort={} to={} subject={} attempt={}", host, port, to, subject, attempt);
                 return;
             }
             if (smtpPassword == null || smtpPassword.isBlank()) {
-                log.error("event=email_send_failed reason=smtp_password_missing smtpHost={} smtpPort={} smtpUser={} to={} subject={}", host, port, maskEmail(smtpUsername), to, subject);
+                log.error("event=email_send_failed reason=smtp_password_missing smtpHost={} smtpPort={} smtpUser={} to={} subject={} attempt={}", host, port, maskEmail(smtpUsername), to, subject, attempt);
                 return;
             }
         }
 
         String effectiveFrom = (configuredFrom != null && !configuredFrom.isBlank()) ? configuredFrom : smtpUsername;
         String bcc = (configuredBcc != null && !configuredBcc.isBlank()) ? configuredBcc.trim() : null;
+        String fromName = emailProperties.fromName();
 
         try {
             var mime = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mime, false, StandardCharsets.UTF_8.name());
 
             if (effectiveFrom != null && !effectiveFrom.isBlank()) {
-                helper.setFrom(effectiveFrom);
+                if (fromName != null && !fromName.isBlank()) {
+                    helper.setFrom(effectiveFrom, fromName);
+                } else {
+                    helper.setFrom(effectiveFrom);
+                }
             }
             helper.setTo(to);
             if (bcc != null) {
@@ -116,7 +139,7 @@ public class SmtpEmailSender implements EmailSender {
 
             mailSender.send(mime);
             log.info(
-                    "event=email_sent to={} bcc={} subject={} smtpHost={} smtpPort={} smtpUser={} from={} authEnabled={} startTlsEnabled={} charset={}",
+                    "event=email_sent status=SUCCESS to={} bcc={} subject={} smtpHost={} smtpPort={} smtpUser={} from={} authEnabled={} startTlsEnabled={} charset={} attempt={}",
                     to,
                     maskEmail(bcc),
                     subject,
@@ -126,10 +149,11 @@ public class SmtpEmailSender implements EmailSender {
                     maskEmail(effectiveFrom),
                     smtpAuth,
                     startTls,
-                    StandardCharsets.UTF_8.name());
+                    StandardCharsets.UTF_8.name(),
+                    attempt);
         } catch (MailException e) {
             log.error(
-                    "event=email_send_failed to={} subject={} smtpHost={} smtpPort={} smtpUser={} from={} authEnabled={} startTlsEnabled={} errorType={} error={}",
+                    "event=email_send_failed status=FAILED to={} subject={} smtpHost={} smtpPort={} smtpUser={} from={} authEnabled={} startTlsEnabled={} errorType={} error={} attempt={}",
                     to,
                     subject,
                     host,
@@ -139,10 +163,12 @@ public class SmtpEmailSender implements EmailSender {
                     smtpAuth,
                     startTls,
                     e.getClass().getSimpleName(),
-                    e.getMessage());
+                    e.getMessage(),
+                    attempt);
+            scheduleRetryPlain(to, subject, body, attempt);
         } catch (Exception e) {
             log.error(
-                    "event=email_send_failed to={} subject={} smtpHost={} smtpPort={} smtpUser={} from={} authEnabled={} startTlsEnabled={} errorType={} error={}",
+                    "event=email_send_failed status=FAILED to={} subject={} smtpHost={} smtpPort={} smtpUser={} from={} authEnabled={} startTlsEnabled={} errorType={} error={} attempt={}",
                     to,
                     subject,
                     host,
@@ -152,7 +178,18 @@ public class SmtpEmailSender implements EmailSender {
                     smtpAuth,
                     startTls,
                     e.getClass().getSimpleName(),
-                    e.toString());
+                    e.toString(),
+                    attempt);
+            scheduleRetryPlain(to, subject, body, attempt);
+        }
+    }
+
+    private void scheduleRetryPlain(String to, String subject, String body, int attempt) {
+        if (attempt < MAX_ATTEMPTS) {
+            log.info("event=email_retry_scheduled to={} subject={} retryInSeconds={} nextAttempt={}", to, subject, RETRY_DELAY_SECONDS, attempt + 1);
+            retryScheduler.schedule(() -> doSendPlain(to, subject, body, attempt + 1), RETRY_DELAY_SECONDS, TimeUnit.SECONDS);
+        } else {
+            log.error("event=email_send_exhausted status=PERMANENTLY_FAILED to={} subject={} totalAttempts={}", to, subject, attempt);
         }
     }
 
@@ -163,6 +200,8 @@ public class SmtpEmailSender implements EmailSender {
      * The method validates SMTP configuration as in the plain send method and attaches files that exist
      * on the filesystem. Missing files are skipped with a warning. The helper will set the message to
      * multipart so attachments are delivered correctly.
+     *
+     * <p>If the first attempt fails, a retry is scheduled after 120 seconds.
      *
      * @param to destination email address. If null or blank the send is skipped.
      * @param subject message subject; may be null.
@@ -175,37 +214,45 @@ public class SmtpEmailSender implements EmailSender {
             send(to, subject, body);
             return;
         }
+        doSendWithAttachments(to, subject, body, attachments, 1);
+    }
 
+    private void doSendWithAttachments(String to, String subject, String body, List<EmailAttachment> attachments, int attempt) {
         if (to == null || to.isBlank()) {
-            log.info("event=email_send_skipped reason=missing_to");
+            log.info("event=email_send_skipped reason=missing_to attempt={}", attempt);
             return;
         }
 
         if (host == null || host.isBlank()) {
-            log.error("event=email_send_failed reason=smtp_host_missing to={} subject={}", to, subject);
+            log.error("event=email_send_failed reason=smtp_host_missing to={} subject={} attempt={}", to, subject, attempt);
             return;
         }
 
         if (smtpAuth) {
             if (smtpUsername == null || smtpUsername.isBlank()) {
-                log.error("event=email_send_failed reason=smtp_username_missing smtpHost={} smtpPort={} to={} subject={}", host, port, to, subject);
+                log.error("event=email_send_failed reason=smtp_username_missing smtpHost={} smtpPort={} to={} subject={} attempt={}", host, port, to, subject, attempt);
                 return;
             }
             if (smtpPassword == null || smtpPassword.isBlank()) {
-                log.error("event=email_send_failed reason=smtp_password_missing smtpHost={} smtpPort={} smtpUser={} to={} subject={}", host, port, maskEmail(smtpUsername), to, subject);
+                log.error("event=email_send_failed reason=smtp_password_missing smtpHost={} smtpPort={} smtpUser={} to={} subject={} attempt={}", host, port, maskEmail(smtpUsername), to, subject, attempt);
                 return;
             }
         }
 
         String effectiveFrom = (configuredFrom != null && !configuredFrom.isBlank()) ? configuredFrom : smtpUsername;
         String bcc = (configuredBcc != null && !configuredBcc.isBlank()) ? configuredBcc.trim() : null;
+        String fromName = emailProperties.fromName();
 
         try {
             var mime = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mime, true, StandardCharsets.UTF_8.name());
 
             if (effectiveFrom != null && !effectiveFrom.isBlank()) {
-                helper.setFrom(effectiveFrom);
+                if (fromName != null && !fromName.isBlank()) {
+                    helper.setFrom(effectiveFrom, fromName);
+                } else {
+                    helper.setFrom(effectiveFrom);
+                }
             }
             helper.setTo(to);
             if (bcc != null) {
@@ -237,7 +284,7 @@ public class SmtpEmailSender implements EmailSender {
 
             mailSender.send(mime);
             log.info(
-                    "event=email_sent_with_attachments to={} bcc={} subject={} attachmentCount={} smtpHost={} smtpPort={} smtpUser={} from={} authEnabled={} startTlsEnabled={} charset={}",
+                    "event=email_sent_with_attachments status=SUCCESS to={} bcc={} subject={} attachmentCount={} smtpHost={} smtpPort={} smtpUser={} from={} authEnabled={} startTlsEnabled={} charset={} attempt={}",
                     to,
                     maskEmail(bcc),
                     subject,
@@ -248,10 +295,11 @@ public class SmtpEmailSender implements EmailSender {
                     maskEmail(effectiveFrom),
                     smtpAuth,
                     startTls,
-                    StandardCharsets.UTF_8.name());
+                    StandardCharsets.UTF_8.name(),
+                    attempt);
         } catch (MailException e) {
             log.error(
-                    "event=email_send_failed to={} subject={} smtpHost={} smtpPort={} smtpUser={} from={} authEnabled={} startTlsEnabled={} errorType={} error={}",
+                    "event=email_send_failed status=FAILED to={} subject={} smtpHost={} smtpPort={} smtpUser={} from={} authEnabled={} startTlsEnabled={} errorType={} error={} attempt={}",
                     to,
                     subject,
                     host,
@@ -261,10 +309,12 @@ public class SmtpEmailSender implements EmailSender {
                     smtpAuth,
                     startTls,
                     e.getClass().getSimpleName(),
-                    e.getMessage());
+                    e.getMessage(),
+                    attempt);
+            scheduleRetryWithAttachments(to, subject, body, attachments, attempt);
         } catch (Exception e) {
             log.error(
-                    "event=email_send_failed to={} subject={} smtpHost={} smtpPort={} smtpUser={} from={} authEnabled={} startTlsEnabled={} errorType={} error={}",
+                    "event=email_send_failed status=FAILED to={} subject={} smtpHost={} smtpPort={} smtpUser={} from={} authEnabled={} startTlsEnabled={} errorType={} error={} attempt={}",
                     to,
                     subject,
                     host,
@@ -274,7 +324,18 @@ public class SmtpEmailSender implements EmailSender {
                     smtpAuth,
                     startTls,
                     e.getClass().getSimpleName(),
-                    e.toString());
+                    e.toString(),
+                    attempt);
+            scheduleRetryWithAttachments(to, subject, body, attachments, attempt);
+        }
+    }
+
+    private void scheduleRetryWithAttachments(String to, String subject, String body, List<EmailAttachment> attachments, int attempt) {
+        if (attempt < MAX_ATTEMPTS) {
+            log.info("event=email_retry_scheduled to={} subject={} retryInSeconds={} nextAttempt={}", to, subject, RETRY_DELAY_SECONDS, attempt + 1);
+            retryScheduler.schedule(() -> doSendWithAttachments(to, subject, body, attachments, attempt + 1), RETRY_DELAY_SECONDS, TimeUnit.SECONDS);
+        } else {
+            log.error("event=email_send_exhausted status=PERMANENTLY_FAILED to={} subject={} totalAttempts={}", to, subject, attempt);
         }
     }
 

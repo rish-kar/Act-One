@@ -42,22 +42,28 @@ public class TicketIssuanceService {
             count = 1;
         }
 
-        // Allocate a unique userId for this purchase
+        String fullName = purchaseTicket.getFullName();
+        String email = purchaseTicket.getEmail();
+        String phone = purchaseTicket.getPhoneNumber();
+
+        // UserId must be based ONLY on identity: Full Name + Email + Phone.
+        // If even one character differs in any of those, a new userId must be allocated.
+        // transactionId must NOT affect userId generation.
         String providedUserId = purchaseTicket.getUserId();
-        String providedTransactionId = purchaseTicket.getTransactionId();
-        String userId;
-        if (providedUserId != null && !providedUserId.isBlank()) {
+
+        String userId = userService.resolveOrCreateUserId(fullName, phone, email);
+
+        // Backwards compatibility: if identity-based resolution returned null (shouldn't), fall back to provided userId.
+        if (userId == null && providedUserId != null && !providedUserId.isBlank()) {
             userId = providedUserId.trim();
-        } else if (providedTransactionId != null && !providedTransactionId.isBlank()) {
-            userId = ticketRepository.findFirstByTransactionId(providedTransactionId)
-                    .map(Ticket::getUserId)
-                    .filter(id -> id != null && !id.isBlank())
-                    .orElseGet(userIdService::allocateUniqueUserId);
-        } else {
+        }
+
+        if (userId == null) {
             userId = userIdService.allocateUniqueUserId();
         }
 
-        String transactionId = providedTransactionId;
+        // transactionId stays whatever the caller provided; if missing generate one.
+        String transactionId = purchaseTicket.getTransactionId();
         if (transactionId == null || transactionId.isBlank()) {
             transactionId = "TXN-" + java.util.UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         }
@@ -67,10 +73,7 @@ public class TicketIssuanceService {
             throw new IllegalArgumentException("ticketAmount is required");
         }
 
-        // prepare fields for user lookup
-        String fullName = purchaseTicket.getFullName();
-        String email = purchaseTicket.getEmail();
-        String phone = purchaseTicket.getPhoneNumber();
+        // Normalize phone for ticket storage (last 10 digits)
         String last10 = null;
         if (phone != null) {
             String digits = phone.replaceAll("\\D", "");
@@ -78,18 +81,7 @@ public class TicketIssuanceService {
             last10 = digits;
         }
 
-        // NEW: if a user already exists in users table with same fullName+phone+email,
-        // use that user's userId for the tickets. This ensures multiple purchases by the same
-        // person keep the same userId.
         String normalizedEmail = email == null ? null : email.trim();
-        String existingUserId = null;
-        if (fullName != null && last10 != null && normalizedEmail != null) {
-            var match = userRepository.findFirstByFullNameAndPhoneNumberAndEmail(fullName, last10, normalizedEmail);
-            if (match != null) {
-                existingUserId = match.getUserId();
-                log.debug("event=found_existing_user_for_ticket userId={} fullName={} phone={} email={}", existingUserId, fullName, last10, normalizedEmail);
-            }
-        }
 
         List<Ticket> savedTickets = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
@@ -115,12 +107,10 @@ public class TicketIssuanceService {
             t.setFullName(fullName);
             t.setEmail(email);
             t.setPhoneNumber(last10 != null ? last10 : purchaseTicket.getPhoneNumber());
-            // Set status to TRANSACTION_MADE - tickets need manual approval to become ISSUED
             t.setStatus(TicketStatus.TRANSACTION_MADE);
             t.setTicketCount(count);
 
-            // Use existing user id if we found a match; otherwise use computed userId variable
-            t.setUserId(existingUserId != null ? existingUserId : userId);
+            t.setUserId(userId);
             t.setTransactionId(transactionId);
             t.setTicketAmount(amount);
 
@@ -168,3 +158,4 @@ public class TicketIssuanceService {
         eventPublisher.publishEvent(new TicketPurchaseIssuedEvent(List.copyOf(persistedTickets)));
     }
 }
+

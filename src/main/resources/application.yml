@@ -23,18 +23,22 @@ spring:
           starttls:
             enable: ${ACTONE_SMTP_STARTTLS:true}
             required: ${ACTONE_SMTP_STARTTLS_REQUIRED:true}
+          ssl:
+            enable: ${ACTONE_SMTP_SSL_ENABLE:false}
+            trust: ${ACTONE_SMTP_SSL_TRUST:${ACTONE_SMTP_HOST:smtp.gmail.com}}
+            protocols: ${ACTONE_SMTP_SSL_PROTOCOLS:TLSv1.2}
           allowutf8: true
-          connectiontimeout: 150000
-          timeout: 150000
-          writetimeout: 150000
+          # Keep timeouts reasonably low by default so failures surface quickly.
+          # Override via ACTONE_SMTP_*_TIMEOUT_MS if needed.
+          connectiontimeout: ${ACTONE_SMTP_CONNECTION_TIMEOUT_MS:10000}
+          timeout: ${ACTONE_SMTP_TIMEOUT_MS:10000}
+          writetimeout: ${ACTONE_SMTP_WRITE_TIMEOUT_MS:10000}
         mime:
           charset: UTF-8
         transport:
           protocol: smtp
         mime.encodefilename: true
         smtp.sendpartial: true
-        ssl:
-          trust: ${ACTONE_SMTP_SSL_TRUST:${ACTONE_SMTP_HOST:smtp.gmail.com}}
 
 logging:
   level:
@@ -64,3 +68,6 @@ management:
     web:
       exposure:
         include: health,info
+
+server:
+  port: ${PORT:8080}

@@ -3,7 +3,7 @@ package com.prarambh.act.one.ticketing.service;
 import com.prarambh.act.one.ticketing.model.User;
 import com.prarambh.act.one.ticketing.repository.UserRepository;
 import java.util.List;
-import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -15,16 +15,15 @@ import org.springframework.util.StringUtils;
  * of the composite (fullName, phoneNumber, email) when creating/updating users.
  */
 @Service
+@Slf4j
 public class UserService {
 
     private final UserRepository repo;
+    private final UserIdService userIdService;
 
-    public UserService(UserRepository repo) {
+    public UserService(UserRepository repo, UserIdService userIdService) {
         this.repo = repo;
-    }
-
-    private String shortUuid() {
-        return UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        this.userIdService = userIdService;
     }
 
     /**
@@ -49,7 +48,7 @@ public class UserService {
             throw new IllegalArgumentException("duplicate user");
         }
 
-        u.setUserId(shortUuid());
+        u.setUserId(userIdService.allocateUniqueUserId());
         return repo.save(u);
     }
 
@@ -140,6 +139,64 @@ public class UserService {
      */
     @Transactional
     public void deleteById(Long id){ repo.deleteById(id); }
+
+    /**
+     * Resolve a stable userId for a person based on identity: fullName + email + phone (last 10 digits).
+     *
+     * <p>Contract:
+     * <ul>
+     *   <li>If (fullName, phone, email) matches an existing user row, re-use that user's userId.</li>
+     *   <li>If any of the 3 fields differs, allocate a new userId and create a NEW user row.</li>
+     *   <li>If any field is missing/blank, this method DOES NOT attempt to match and always allocates a new userId.</li>
+     * </ul>
+     */
+    @Transactional
+    public String resolveOrCreateUserId(String fullName, String phone, String email) {
+        String normalizedFullName = fullName == null ? null : fullName.trim();
+        String normalizedEmail = email == null ? null : email.trim().toLowerCase();
+        String normalizedPhone = null;
+        if (StringUtils.hasText(phone)) {
+            String digits = phone.replaceAll("\\D", "");
+            if (digits.length() > 10) digits = digits.substring(digits.length() - 10);
+            normalizedPhone = digits;
+        }
+
+        log.info("event=resolve_user_id_start fullName='{}' phone='{}' email='{}' normalizedFullName='{}' normalizedPhone='{}' normalizedEmail='{}'",
+                fullName, phone, email, normalizedFullName, normalizedPhone, normalizedEmail);
+
+        if (!StringUtils.hasText(normalizedFullName) || !StringUtils.hasText(normalizedEmail) || !StringUtils.hasText(normalizedPhone)) {
+            // Not enough information to match reliably - allocate new
+            String allocated = userIdService.allocateUniqueUserId();
+            log.info("event=resolve_user_id_new_incomplete reason=missing_fields userId={}", allocated);
+            User u = new User();
+            u.setUserId(allocated);
+            u.setFullName(normalizedFullName == null ? "" : normalizedFullName);
+            u.setEmail(normalizedEmail);
+            u.setPhoneNumber(normalizedPhone);
+            repo.save(u);
+            return allocated;
+        }
+
+        // Look for existing user with exact match on normalized (fullName, phone, email) - case insensitive email
+        User match = repo.findFirstByFullNameAndPhoneNumberAndEmailIgnoreCase(normalizedFullName, normalizedPhone, normalizedEmail);
+        if (match != null) {
+            log.info("event=resolve_user_id_found_match existingUserId={} fullName='{}' phone='{}' email='{}'",
+                    match.getUserId(), normalizedFullName, normalizedPhone, normalizedEmail);
+            return match.getUserId();
+        }
+
+        // No match - create new user
+        String allocated = userIdService.allocateUniqueUserId();
+        log.info("event=resolve_user_id_new_user userId={} fullName='{}' phone='{}' email='{}'",
+                allocated, normalizedFullName, normalizedPhone, normalizedEmail);
+        User u = new User();
+        u.setUserId(allocated);
+        u.setFullName(normalizedFullName);
+        u.setEmail(normalizedEmail);
+        u.setPhoneNumber(normalizedPhone);
+        repo.save(u);
+        return allocated;
+    }
 
     /**
      * Ensure a User row exists for the given userId. If not present, create one using the

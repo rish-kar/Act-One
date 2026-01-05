@@ -28,6 +28,7 @@ public class ManualTransactionService {
     private final TicketIssuanceService ticketIssuanceService;
     private final TicketCheckInService ticketCheckInService;
     private final AuditoriumService auditoriumService;
+    private final UserService userService;
 
     /**
      * Record a manual transaction (transaction made).
@@ -64,12 +65,11 @@ public class ManualTransactionService {
                 ? ticketRepository.findFirstByTransactionId(req.transactionId())
                 : Optional.empty();
 
-        String userId = existingForTxn
-                .map(Ticket::getUserId)
-                .filter(id -> id != null && !id.isBlank())
-                .orElseGet(() -> shortUuid());
-
         String normalizedPhone = normalizePhoneLast10(req.phoneNumber());
+
+        // IMPORTANT: userId is STRICTLY identity-based: fullName + email + phone.
+        // transactionId must NOT affect the userId generation.
+        String userId = userService.resolveOrCreateUserId(req.fullName(), normalizedPhone, req.email());
 
         Ticket purchase = new Ticket();
         purchase.setShowName(req.showName());
