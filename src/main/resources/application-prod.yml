@@ -33,3 +33,6 @@ spring:
 logging:
   level:
     org.hibernate.SQL: DEBUG
+
+server:
+  port: ${PORT:8080}

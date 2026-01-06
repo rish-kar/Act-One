@@ -33,6 +33,8 @@ actone:
   email:
     enabled: false
     bcc: ""
+    dedupe:
+      enabled: false
   ticket-card:
     enabled: true
     templateResource: "classpath:/static/Card.png"

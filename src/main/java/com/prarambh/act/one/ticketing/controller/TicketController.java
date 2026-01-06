@@ -4,6 +4,8 @@ import com.prarambh.act.one.ticketing.model.Ticket;
 import com.prarambh.act.one.ticketing.model.TicketStatus;
 import com.prarambh.act.one.ticketing.repository.AuditoriumRepository;
 import com.prarambh.act.one.ticketing.repository.TicketRepository;
+import com.prarambh.act.one.ticketing.service.TicketPurchaseCheckedInEvent;
+import com.prarambh.act.one.ticketing.service.TicketPurchaseIssuedEvent;
 import com.prarambh.act.one.ticketing.service.ShowSettingsService;
 import com.prarambh.act.one.ticketing.service.TicketCheckInService;
 import com.prarambh.act.one.ticketing.service.TicketIssuanceService;
@@ -14,6 +16,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +26,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -50,6 +54,7 @@ public class TicketController {
     private final TicketIssuanceService ticketIssuanceService;
     private final TicketCheckInService ticketCheckInService;
     private final AuditoriumRepository auditoriumRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Value("${actone.admin.purge-password:}")
     private String adminPassword;
@@ -359,6 +364,7 @@ public class TicketController {
             String userId,
             String transactionId,
             String status,
+            java.math.BigDecimal ticketAmount,
             Integer ticketCount,
             String id,
             LocalDate createdAtDate,
@@ -381,6 +387,7 @@ public class TicketController {
                     t.getUserId(),
                     t.getTransactionId(),
                     t.getStatus() != null ? t.getStatus().name() : null,
+                    t.getTicketAmount(),
                     t.getTicketCount(),
                     t.getTransactionId(),
                     t.getCreatedAtDate(),
@@ -436,7 +443,10 @@ public class TicketController {
 
         // Full replace semantics for common safe fields.
         // We intentionally do NOT mutate primary identifiers like ticketId / qrCodeId.
+        // Track status transitions so we can trigger emails after persistence.
+        Map<UUID, TicketStatus> oldStatuses = new HashMap<>();
         for (Ticket t : tickets) {
+            oldStatuses.put(t.getTicketId(), t.getStatus());
             if (request.containsKey("showName")) t.setShowName(String.valueOf(request.get("showName")));
             if (request.containsKey("showId")) t.setShowId(String.valueOf(request.get("showId")));
             if (request.containsKey("auditoriumId")) t.setAuditoriumId(String.valueOf(request.get("auditoriumId")));
@@ -454,6 +464,7 @@ public class TicketController {
         }
 
         ticketRepository.saveAll(tickets);
+        triggerStatusEmailsIfNeeded(tickets, oldStatuses);
         return ResponseEntity.ok(tickets.stream().map(TicketResponse::from).toList());
     }
 
@@ -480,7 +491,9 @@ public class TicketController {
             return ResponseEntity.ok(tickets.stream().map(TicketResponse::from).toList());
         }
 
+        Map<UUID, TicketStatus> oldStatuses = new HashMap<>();
         for (Ticket t : tickets) {
+            oldStatuses.put(t.getTicketId(), t.getStatus());
             if (patch.containsKey("showName")) t.setShowName(String.valueOf(patch.get("showName")));
             if (patch.containsKey("showId")) t.setShowId(String.valueOf(patch.get("showId")));
             if (patch.containsKey("auditoriumId")) t.setAuditoriumId(String.valueOf(patch.get("auditoriumId")));
@@ -498,6 +511,7 @@ public class TicketController {
         }
 
         ticketRepository.saveAll(tickets);
+        triggerStatusEmailsIfNeeded(tickets, oldStatuses);
         return ResponseEntity.ok(tickets.stream().map(TicketResponse::from).toList());
     }
 
@@ -608,12 +622,114 @@ public class TicketController {
             return ResponseEntity.status(404).body(Map.of("message", "No tickets matched the provided partial name and ticketId suffix"));
         }
 
+        Map<UUID, TicketStatus> oldStatuses = new HashMap<>();
+        for (Ticket t : matched) {
+            oldStatuses.put(t.getTicketId(), t.getStatus());
+        }
+
         // Apply update
         for (Ticket t : matched) {
             t.setStatus(newStatus);
         }
         ticketRepository.saveAll(matched);
 
+        triggerStatusEmailsIfNeeded(matched, oldStatuses);
+
         return ResponseEntity.ok(matched.stream().map(TicketResponse::from).toList());
+    }
+
+
+    /**
+     * Triggers purchase-level email events when tickets transition to ISSUED or USED.
+     *
+     * <p>This keeps behavior consistent across controller endpoints (PATCH/PUT/bulk admin flows)
+     * by publishing the same events used in the normal issuance/check-in services.
+     */
+    private void triggerStatusEmailsIfNeeded(List<Ticket> updatedTickets, Map<UUID, TicketStatus> oldStatuses) {
+        if (updatedTickets == null || updatedTickets.isEmpty() || oldStatuses == null || oldStatuses.isEmpty()) {
+            return;
+        }
+
+        // Collect tickets that actually transitioned.
+        List<Ticket> transitionedToIssued = new ArrayList<>();
+        List<Ticket> transitionedToUsed = new ArrayList<>();
+        for (Ticket t : updatedTickets) {
+            if (t == null || t.getTicketId() == null) continue;
+            TicketStatus before = oldStatuses.get(t.getTicketId());
+            TicketStatus after = t.getStatus();
+            if (before == after) continue;
+
+            if (after == TicketStatus.ISSUED) {
+                transitionedToIssued.add(t);
+            } else if (after == TicketStatus.USED) {
+                transitionedToUsed.add(t);
+            }
+        }
+
+        // ISSUED: publish one event per purchase group.
+        if (!transitionedToIssued.isEmpty()) {
+            for (List<Ticket> group : groupTicketsForEmail(transitionedToIssued)) {
+                if (!group.isEmpty()) {
+                    eventPublisher.publishEvent(new TicketPurchaseIssuedEvent(List.copyOf(group)));
+                }
+            }
+        }
+
+        // USED: publish only if the full group is now USED (no ISSUED remaining), matching TicketCheckInService.
+        if (!transitionedToUsed.isEmpty()) {
+            for (List<Ticket> group : groupTicketsForEmail(transitionedToUsed)) {
+                if (group.isEmpty()) continue;
+
+                Ticket sample = group.get(0);
+                boolean shouldPublish = false;
+
+                if (sample.getEmail() != null && sample.getPhoneNumber() != null && sample.getShowId() != null) {
+                    long remainingIssued = ticketRepository.countByEmailIgnoreCaseAndPhoneNumberIgnoreCaseAndShowIdAndStatus(
+                            sample.getEmail(),
+                            sample.getPhoneNumber(),
+                            sample.getShowId(),
+                            TicketStatus.ISSUED
+                    );
+                    shouldPublish = remainingIssued == 0;
+                } else if (sample.getUserId() != null) {
+                    List<Ticket> userTickets = ticketRepository.findByUserId(sample.getUserId());
+                    shouldPublish = userTickets.stream().noneMatch(t -> t.getStatus() == TicketStatus.ISSUED);
+                    // Use userTickets as the group for the email.
+                    group = userTickets;
+                }
+
+                if (shouldPublish) {
+                    eventPublisher.publishEvent(new TicketPurchaseCheckedInEvent(List.copyOf(group)));
+                }
+            }
+        }
+    }
+
+    /**
+     * Groups tickets into purchase groups for email events.
+     *
+     * <p>Primary grouping: (email, phoneNumber, showId). Fallback: userId.
+     */
+    private List<List<Ticket>> groupTicketsForEmail(List<Ticket> tickets) {
+        Map<String, List<Ticket>> groups = new LinkedHashMap<>();
+        for (Ticket t : tickets) {
+            if (t == null) continue;
+
+            String key;
+            if (t.getEmail() != null && t.getPhoneNumber() != null && t.getShowId() != null) {
+                key = "E:" + t.getEmail().toLowerCase() + "|P:" + t.getPhoneNumber().toLowerCase() + "|S:" + t.getShowId();
+                // Fetch the full group from DB to ensure we include all tickets.
+                List<Ticket> fullGroup = ticketRepository.findByEmailIgnoreCaseAndPhoneNumberIgnoreCaseAndShowId(
+                        t.getEmail(), t.getPhoneNumber(), t.getShowId()
+                );
+                groups.putIfAbsent(key, fullGroup);
+            } else if (t.getUserId() != null) {
+                key = "U:" + t.getUserId();
+                List<Ticket> fullGroup = ticketRepository.findByUserId(t.getUserId());
+                groups.putIfAbsent(key, fullGroup);
+            }
+        }
+
+        return new ArrayList<>(groups.values());
     }
 }

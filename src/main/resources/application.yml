@@ -23,18 +23,22 @@ spring:
           starttls:
             enable: ${ACTONE_SMTP_STARTTLS:true}
             required: ${ACTONE_SMTP_STARTTLS_REQUIRED:true}
+          ssl:
+            enable: ${ACTONE_SMTP_SSL_ENABLE:false}
+            trust: ${ACTONE_SMTP_SSL_TRUST:${ACTONE_SMTP_HOST:smtp.gmail.com}}
+            protocols: ${ACTONE_SMTP_SSL_PROTOCOLS:TLSv1.2}
           allowutf8: true
-          connectiontimeout: 150000
-          timeout: 150000
-          writetimeout: 150000
+          # Keep timeouts reasonable: Gmail can be slow to accept connections on some networks.
+          # Override via ACTONE_SMTP_*_TIMEOUT_MS if needed.
+          connectiontimeout: ${ACTONE_SMTP_CONNECTION_TIMEOUT_MS:30000}
+          timeout: ${ACTONE_SMTP_TIMEOUT_MS:30000}
+          writetimeout: ${ACTONE_SMTP_WRITE_TIMEOUT_MS:30000}
         mime:
           charset: UTF-8
         transport:
           protocol: smtp
         mime.encodefilename: true
         smtp.sendpartial: true
-        ssl:
-          trust: ${ACTONE_SMTP_SSL_TRUST:${ACTONE_SMTP_HOST:smtp.gmail.com}}
 
 logging:
   level:
@@ -50,8 +54,8 @@ actone:
   email:
     enabled: ${ACTONE_EMAIL_ENABLED:true}
     subject: "Your ticket with Prarambh Theatre has been issued"
-    fromName: "Prarambh Theatre Group"
-    from: ${ACTONE_EMAIL_FROM:${ACTONE_SMTP_USERNAME:}}
+    from-name: ${ACTONE_EMAIL_FROM_NAME:Prarambh Theatre Group}
+    from: ${ACTONE_EMAIL_FROM:}
     bcc: ${ACTONE_EMAIL_BCC:}
   ticket-card:
     enabled: ${ACTONE_TICKET_CARD_ENABLED:true}
@@ -64,3 +68,6 @@ management:
     web:
       exposure:
         include: health,info
+
+server:
+  port: ${PORT:8080}

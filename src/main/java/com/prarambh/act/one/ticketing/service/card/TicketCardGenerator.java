@@ -18,6 +18,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.EnumMap;
 import java.util.Map;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.Resource;
@@ -73,6 +74,40 @@ public class TicketCardGenerator {
 
     private final ResourceLoader resourceLoader;
     private final TicketCardProperties properties;
+
+    // Cached template to avoid reloading the large image for each ticket
+    private volatile BufferedImage cachedTemplate;
+    private final Object templateLock = new Object();
+
+    /**
+     * Pre-load the template at startup to fail fast if there are issues
+     * and to ensure ImageIO plugins are initialized.
+     */
+    @PostConstruct
+    public void init() {
+        if (!properties.enabled()) {
+            log.info("event=ticket_card_generator_disabled");
+            return;
+        }
+
+        try {
+            // Initialize ImageIO scanners to avoid lazy loading issues
+            log.info("event=imageio_init_starting");
+            javax.imageio.ImageIO.scanForPlugins();
+            String[] readerFormats = javax.imageio.ImageIO.getReaderFormatNames();
+            String[] writerFormats = javax.imageio.ImageIO.getWriterFormatNames();
+            log.info("event=imageio_init_complete readerFormats={} writerFormats={}",
+                    String.join(",", readerFormats), String.join(",", writerFormats));
+
+            // Pre-load the template at startup
+            log.info("event=template_preload_starting");
+            loadTemplate();
+            log.info("event=template_preload_complete");
+        } catch (Exception e) {
+            log.error("event=template_preload_failed error={}", e.toString(), e);
+            // Don't throw - allow app to start, but email card generation will fail
+        }
+    }
 
     public Path generateTicketCardPng(Ticket ticket) {
         if (!properties.enabled()) {
@@ -131,29 +166,72 @@ public class TicketCardGenerator {
 
         Path output = outputDir.resolve("ticket-" + ticket.getTicketId() + ".png");
         try {
-            javax.imageio.ImageIO.write(out, "png", output.toFile());
+            // Convert to RGB for JPEG (no alpha channel support)
+            BufferedImage rgbImage = new BufferedImage(out.getWidth(), out.getHeight(), BufferedImage.TYPE_INT_RGB);
+            Graphics2D rgbG = rgbImage.createGraphics();
+            rgbG.drawImage(out, 0, 0, null);
+            rgbG.dispose();
+
+            // Write as PNG (lossless) to preserve existing behavior and tests.
+            javax.imageio.ImageIO.write(rgbImage, "png", Files.newOutputStream(output));
         } catch (IOException e) {
-            throw new IllegalStateException("Failed to write ticket card PNG to " + output, e);
+            throw new IllegalStateException("Failed to write ticket card image to " + output, e);
         }
 
-        log.info("event=ticket_card_generated path={} ticketId={} qrCodeId={}", output.toAbsolutePath(), ticket.getTicketId(), ticket.getQrCodeId());
+        log.info("event=ticket_card_generated path={} ticketId={} qrCodeId={}", output, ticket.getTicketId(), ticket.getQrCodeId());
         return output;
     }
 
     private BufferedImage loadTemplate() {
-        String resourcePath = properties.templateResource() == null || properties.templateResource().isBlank()
-                ? "classpath:/static/Card.png"
-                : properties.templateResource();
+        // Double-checked locking for thread-safe lazy initialization
+        BufferedImage template = cachedTemplate;
+        if (template != null) {
+            return template;
+        }
 
-        Resource resource = resourceLoader.getResource(resourcePath);
-        try (InputStream is = resource.getInputStream()) {
-            BufferedImage img = javax.imageio.ImageIO.read(is);
-            if (img == null) {
-                throw new IllegalStateException("Template image could not be decoded: " + resourcePath);
+        synchronized (templateLock) {
+            template = cachedTemplate;
+            if (template != null) {
+                return template;
             }
-            return img;
-        } catch (IOException e) {
-            throw new IllegalStateException("Failed to load template image: " + resourcePath, e);
+
+            String resourcePath = properties.templateResource() == null || properties.templateResource().isBlank()
+                    ? "classpath:/static/Card.png"
+                    : properties.templateResource();
+
+            Resource resource = resourceLoader.getResource(resourcePath);
+            try {
+                if (!resource.exists()) {
+                    throw new IllegalStateException("Template resource does not exist: " + resourcePath);
+                }
+                try (InputStream is = resource.getInputStream()) {
+                    if (is == null) {
+                        throw new IllegalStateException("Template resource input stream is null: " + resourcePath);
+                    }
+                    // Read all bytes first to avoid stream issues
+                    byte[] imageBytes = is.readAllBytes();
+                    log.info("event=template_resource_loaded resourcePath={} sizeBytes={}", resourcePath, imageBytes.length);
+
+                    log.info("event=template_decode_starting resourcePath={}", resourcePath);
+                    BufferedImage img = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(imageBytes));
+                    log.info("event=template_decode_finished resourcePath={} result={}", resourcePath, img != null ? "success" : "null");
+
+                    if (img == null) {
+                        // Log available ImageIO readers for debugging
+                        String[] readerFormats = javax.imageio.ImageIO.getReaderFormatNames();
+                        log.error("event=template_decode_failed resourcePath={} availableFormats={}", resourcePath, String.join(",", readerFormats));
+                        throw new IllegalStateException("Template image could not be decoded (ImageIO returned null): " + resourcePath);
+                    }
+                    log.info("event=template_image_decoded resourcePath={} width={} height={}", resourcePath, img.getWidth(), img.getHeight());
+
+                    // Cache the template for reuse
+                    cachedTemplate = img;
+                    return img;
+                }
+            } catch (IOException e) {
+                log.error("event=template_load_io_error resourcePath={} error={}", resourcePath, e.toString(), e);
+                throw new IllegalStateException("Failed to load template image: " + resourcePath, e);
+            }
         }
     }
 
@@ -297,13 +375,11 @@ public class TicketCardGenerator {
 
             FontRenderContext frc = g.getFontRenderContext();
 
-            // Use Montserrat SemiBold if available, otherwise fall back.
-            Font base = new Font("Arial", Font.PLAIN, 42);
-            if (base.getFamily().equalsIgnoreCase("Dialog")) {
-                base = new Font("Arial", Font.BOLD, 42);
-            }
-            Font font1 = base.deriveFont(Font.PLAIN, TICKET_LABEL_FONT_PX);
-            Font font2 = base.deriveFont(Font.PLAIN, TICKET_VALUE_FONT_PX);
+            // Revert to the original, predictable font choice.
+            // (Do not rely on optional system fonts that may differ across machines/containers.)
+            Font base = new Font("Arial", Font.BOLD, 42);
+            Font font1 = base.deriveFont(Font.BOLD, TICKET_LABEL_FONT_PX);
+            Font font2 = base.deriveFont(Font.BOLD, TICKET_VALUE_FONT_PX);
 
             TextLayout layout1 = new TextLayout(line1, font1, frc);
             TextLayout layout2 = new TextLayout(ticketId, font2, frc);
@@ -314,7 +390,7 @@ public class TicketCardGenerator {
             double h2 = layout2.getBounds().getHeight();
 
             for (int size = (int) TICKET_VALUE_FONT_PX; size >= TICKET_VALUE_MIN_FONT_PX && w2 > (TICKET_ID_W - 12); size--) {
-                font2 = base.deriveFont((float) size);
+                font2 = base.deriveFont(Font.BOLD, (float) size);
                 layout2 = new TextLayout(ticketId, font2, frc);
                 w2 = layout2.getBounds().getWidth();
                 h2 = layout2.getBounds().getHeight();
@@ -325,7 +401,7 @@ public class TicketCardGenerator {
             // Pull the ticket block down by 2% of the template height
             double startY = templateH - TICKET_ID_H - 50 + (TICKET_ID_H - totalH) / 2.0 + (templateH * 0.02);
 
-            // Ticket box centered on X axis, then shifted 5% right.
+            // Ticket box centered on X axis.
             int boxX1 = (templateW - TICKET_ID_W) / 2;
             boxX1 += (int) Math.round(templateW * TICKET_RIGHT_SHIFT_FACTOR);
             float x1 = (float) (boxX1 + (TICKET_ID_W - w1) / 2.0);

@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserIdService {
 
     private final com.prarambh.act.one.ticketing.repository.TicketRepository ticketRepository;
+    private final com.prarambh.act.one.ticketing.repository.UserRepository userRepository;
     private final SecureRandom random = new SecureRandom();
 
     /**
@@ -29,7 +30,7 @@ public class UserIdService {
     public String allocateUniqueUserId() {
         for (int attempt = 1; attempt <= 25; attempt++) {
             String candidate = generateShortUuid();
-            if (!ticketRepository.existsByUserId(candidate)) {
+            if (!ticketRepository.existsByUserId(candidate) && !userRepository.existsByUserId(candidate)) {
                 log.debug("event=user_id_allocated method=random attempt={} userId={}", attempt, candidate);
                 return candidate;
             }
@@ -37,7 +38,7 @@ public class UserIdService {
 
         for (int i = 0; i < 1000; i++) {
             String candidate = generateShortUuid();
-            if (!ticketRepository.existsByUserId(candidate)) {
+            if (!ticketRepository.existsByUserId(candidate) && !userRepository.existsByUserId(candidate)) {
                 log.debug("event=user_id_allocated method=scan userId={}", candidate);
                 return candidate;
             }
