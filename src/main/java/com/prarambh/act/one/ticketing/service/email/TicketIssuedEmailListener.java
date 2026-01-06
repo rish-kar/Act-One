@@ -20,36 +20,36 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @Slf4j
 public class TicketIssuedEmailListener {
 
-    private final EmailSender emailSender;
-    private final EmailProperties emailProperties;
+      private final EmailSender emailSender;
+      private final EmailProperties emailProperties;
 
-    @Async
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void onTicketIssued(TicketIssuedEvent event) {
-        // Disabled: avoid sending one email per ticket row.
-        // The event now contains a list; log the first ticket id if present.
-        var firstId = event.getTickets() == null || event.getTickets().isEmpty()
-                ? null
-                : event.getTickets().get(0).getTicketId();
-        log.debug("event=ticket_issue_email_skipped reason=use_purchase_email_listener ticketId={}", firstId);
-    }
+      @Async
+      @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+      public void onTicketIssued(TicketIssuedEvent event) {
+            // Disabled: avoid sending one email per ticket row.
+            // The event now contains a list; log the first ticket id if present.
+            var firstId = event.getTickets() == null || event.getTickets().isEmpty()
+                    ? null
+                    : event.getTickets().get(0).getTicketId();
+            log.debug("event=ticket_issue_email_skipped reason=use_purchase_email_listener ticketId={}", firstId);
+      }
 
-    private String buildBody(Ticket t) {
-        String fromName = emailProperties.fromName() == null || emailProperties.fromName().isBlank()
-                ? "Act-One"
-                : emailProperties.fromName();
+      private String buildBody(Ticket t) {
+            String fromName = emailProperties.fromName() == null || emailProperties.fromName().isBlank()
+                    ? "Act-One"
+                    : emailProperties.fromName();
 
-        // Simple plaintext body (safe default). Can be replaced by Thymeleaf template later.
-        return "Hello " + nullToEmpty(t.getFullName()) + ",\n\n"
-                + "Your ticket has been issued." + "\n\n"
-                + "Show: " + nullToEmpty(t.getShowName()) + "\n"
-                + "Ticket ID: " + t.getTicketId() + "\n"
-                + "Barcode ID: " + nullToEmpty(t.getQrCodeId()) + "\n\n"
-                + "Thanks,\n"
-                + fromName + "\n";
-    }
+            // Simple plaintext body (safe default). Can be replaced by Thymeleaf template later.
+            return "Hello " + nullToEmpty(t.getFullName()) + ",\n\n"
+                    + "Your ticket has been issued." + "\n\n"
+                    + "Show: " + nullToEmpty(t.getShowName()) + "\n"
+                    + "Ticket ID: " + t.getTicketId() + "\n"
+                    + "Barcode ID: " + nullToEmpty(t.getQrCodeId()) + "\n\n"
+                    + "Thanks,\n"
+                    + fromName + "\n";
+      }
 
-    private static String nullToEmpty(String s) {
-        return s == null ? "" : s;
-    }
+      private static String nullToEmpty(String s) {
+            return s == null ? "" : s;
+      }
 }
