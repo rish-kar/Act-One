@@ -1,7 +1,7 @@
 package com.prarambh.act.one.ticketing.service.email;
 
-import com.prarambh.act.one.ticketing.model.Ticket;
 import com.prarambh.act.one.ticketing.model.EmailQuoteType;
+import com.prarambh.act.one.ticketing.model.Ticket;
 import com.prarambh.act.one.ticketing.service.TicketPurchaseCheckedInEvent;
 import com.prarambh.act.one.ticketing.service.TicketPurchaseIssuedEvent;
 import com.prarambh.act.one.ticketing.service.card.TicketCardGenerator;
@@ -10,7 +10,6 @@ import com.prarambh.act.one.ticketing.service.quotes.TheatreQuote;
 import java.nio.file.Path;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
-
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;

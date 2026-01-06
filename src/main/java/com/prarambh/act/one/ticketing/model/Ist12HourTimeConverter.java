@@ -1,7 +1,6 @@
 package com.prarambh.act.one.ticketing.model;
 
 import jakarta.persistence.*;
-
 import java.time.*;
 import java.time.format.*;
 import java.util.*;

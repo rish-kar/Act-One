@@ -1,14 +1,16 @@
 package com.prarambh.act.one.ticketing.controller;
 
+import static com.prarambh.act.one.ticketing.controller.TicketController.TicketResponse.formatIstTime;
+
 import com.prarambh.act.one.ticketing.model.Ticket;
 import com.prarambh.act.one.ticketing.model.TicketStatus;
 import com.prarambh.act.one.ticketing.repository.AuditoriumRepository;
 import com.prarambh.act.one.ticketing.repository.TicketRepository;
-import com.prarambh.act.one.ticketing.service.TicketPurchaseCheckedInEvent;
-import com.prarambh.act.one.ticketing.service.TicketPurchaseIssuedEvent;
 import com.prarambh.act.one.ticketing.service.ShowSettingsService;
 import com.prarambh.act.one.ticketing.service.TicketCheckInService;
 import com.prarambh.act.one.ticketing.service.TicketIssuanceService;
+import com.prarambh.act.one.ticketing.service.TicketPurchaseCheckedInEvent;
+import com.prarambh.act.one.ticketing.service.TicketPurchaseIssuedEvent;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -30,8 +32,6 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import static com.prarambh.act.one.ticketing.controller.TicketController.TicketResponse.formatIstTime;
 
 /**
  * Ticket-facing API.
