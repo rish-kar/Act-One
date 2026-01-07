@@ -79,4 +79,11 @@ public class UserController {
         service.deleteById(id);
         return ResponseEntity.ok().build();
     }
+
+    @DeleteMapping("/api/users/")
+    public ResponseEntity<?> deleteAll(@RequestHeader(name = "X-Admin-Password", required = false) String pass){
+        if (!isAdmin(pass)) return ResponseEntity.status(HttpStatus.FORBIDDEN).body(java.util.Map.of("message", "admin password required"));
+        long count = service.deleteAll();
+        return ResponseEntity.ok(java.util.Map.of("message", "All users deleted", "deletedCount", count));
+    }
 }

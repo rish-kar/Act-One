@@ -96,75 +96,112 @@ public class SmtpEmailSender implements EmailSender {
             String effectiveFrom = (configuredFrom != null && !configuredFrom.isBlank()) ? configuredFrom : smtpUsername;
             String bcc = (configuredBcc != null && !configuredBcc.isBlank()) ? configuredBcc.trim() : null;
 
-            try {
-                  var mime = mailSender.createMimeMessage();
-                  MimeMessageHelper helper = new MimeMessageHelper(mime, false, StandardCharsets.UTF_8.name());
+            // Retry logic for transient SSL/TLS failures
+            int maxAttempts = 3;
+            Exception lastException = null;
 
-                  if (effectiveFrom != null && !effectiveFrom.isBlank()) {
-                        String fromName = (configuredFromName != null && !configuredFromName.isBlank())
-                                ? configuredFromName.trim()
-                                : null;
+            for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+                  try {
+                        var mime = mailSender.createMimeMessage();
+                        MimeMessageHelper helper = new MimeMessageHelper(mime, false, StandardCharsets.UTF_8.name());
 
-                        if (fromName != null) {
-                              helper.setFrom(effectiveFrom, fromName);
-                        } else {
-                              helper.setFrom(effectiveFrom);
+                        if (effectiveFrom != null && !effectiveFrom.isBlank()) {
+                              String fromName = (configuredFromName != null && !configuredFromName.isBlank())
+                                      ? configuredFromName.trim()
+                                      : null;
+
+                              if (fromName != null) {
+                                    helper.setFrom(effectiveFrom, fromName);
+                              } else {
+                                    helper.setFrom(effectiveFrom);
+                              }
+
                         }
+                        helper.setTo(to);
+                        if (bcc != null) {
+                              helper.setBcc(bcc);
+                        }
+                        String safeSubject = normalizeToAscii(subject == null ? "" : subject);
+                        helper.setSubject(safeSubject);
+                        mime.setSubject(safeSubject, StandardCharsets.UTF_8.name());
 
+                        String safeBody = normalizeToAscii(body == null ? "" : body);
+                        mime.setText(safeBody, StandardCharsets.UTF_8.name());
+
+                        // Force UTF-8 content type for plain text.
+                        mime.setHeader("Content-Type", "text/plain; charset=UTF-8");
+
+                        mailSender.send(mime);
+                        log.info(
+                                "event=email_sent to={} bcc={} subject={} smtpHost={} smtpPort={} smtpUser={} from={} authEnabled={} startTlsEnabled={} charset={} attempt={}",
+                                to,
+                                maskEmail(bcc),
+                                subject,
+                                host,
+                                port,
+                                maskEmail(smtpUsername),
+                                maskEmail(effectiveFrom),
+                                smtpAuth,
+                                startTls,
+                                StandardCharsets.UTF_8.name(),
+                                attempt);
+                        return; // Success, exit retry loop
+                  } catch (MailException e) {
+                        lastException = e;
+                        String errorMsg = e.getMessage() != null ? e.getMessage() : "";
+                        boolean isRetryable = errorMsg.contains("SSLHandshakeException")
+                                || errorMsg.contains("Could not convert socket to TLS")
+                                || errorMsg.contains("Remote host terminated the handshake")
+                                || errorMsg.contains("Connection reset");
+
+                        if (isRetryable && attempt < maxAttempts) {
+                              long delayMs = 1000L * attempt * attempt; // Exponential backoff: 1s, 4s, 9s
+                              log.warn("event=email_send_retry to={} subject={} attempt={} maxAttempts={} delayMs={} error={}",
+                                      to, subject, attempt, maxAttempts, delayMs, e.getMessage());
+                              try {
+                                    Thread.sleep(delayMs);
+                              } catch (InterruptedException ie) {
+                                    Thread.currentThread().interrupt();
+                                    break;
+                              }
+                        } else {
+                              log.error(
+                                      "event=email_send_failed to={} subject={} smtpHost={} smtpPort={} smtpUser={} from={} authEnabled={} startTlsEnabled={} errorType={} error={} attempt={}",
+                                      to,
+                                      subject,
+                                      host,
+                                      port,
+                                      maskEmail(smtpUsername),
+                                      maskEmail(effectiveFrom),
+                                      smtpAuth,
+                                      startTls,
+                                      e.getClass().getSimpleName(),
+                                      e.getMessage(),
+                                      attempt);
+                              return;
+                        }
+                  } catch (Exception e) {
+                        log.error(
+                                "event=email_send_failed to={} subject={} smtpHost={} smtpPort={} smtpUser={} from={} authEnabled={} startTlsEnabled={} errorType={} error={} attempt={}",
+                                to,
+                                subject,
+                                host,
+                                port,
+                                maskEmail(smtpUsername),
+                                maskEmail(effectiveFrom),
+                                smtpAuth,
+                                startTls,
+                                e.getClass().getSimpleName(),
+                                e.toString(),
+                                attempt);
+                        return; // Non-retryable exception
                   }
-                  helper.setTo(to);
-                  if (bcc != null) {
-                        helper.setBcc(bcc);
-                  }
-                  String safeSubject = normalizeToAscii(subject == null ? "" : subject);
-                  helper.setSubject(safeSubject);
-                  mime.setSubject(safeSubject, StandardCharsets.UTF_8.name());
+            }
 
-                  String safeBody = normalizeToAscii(body == null ? "" : body);
-                  mime.setText(safeBody, StandardCharsets.UTF_8.name());
-
-                  // Force UTF-8 content type for plain text.
-                  mime.setHeader("Content-Type", "text/plain; charset=UTF-8");
-
-                  mailSender.send(mime);
-                  log.info(
-                          "event=email_sent to={} bcc={} subject={} smtpHost={} smtpPort={} smtpUser={} from={} authEnabled={} startTlsEnabled={} charset={}",
-                          to,
-                          maskEmail(bcc),
-                          subject,
-                          host,
-                          port,
-                          maskEmail(smtpUsername),
-                          maskEmail(effectiveFrom),
-                          smtpAuth,
-                          startTls,
-                          StandardCharsets.UTF_8.name());
-            } catch (MailException e) {
-                  log.error(
-                          "event=email_send_failed to={} subject={} smtpHost={} smtpPort={} smtpUser={} from={} authEnabled={} startTlsEnabled={} errorType={} error={}",
-                          to,
-                          subject,
-                          host,
-                          port,
-                          maskEmail(smtpUsername),
-                          maskEmail(effectiveFrom),
-                          smtpAuth,
-                          startTls,
-                          e.getClass().getSimpleName(),
-                          e.getMessage());
-            } catch (Exception e) {
-                  log.error(
-                          "event=email_send_failed to={} subject={} smtpHost={} smtpPort={} smtpUser={} from={} authEnabled={} startTlsEnabled={} errorType={} error={}",
-                          to,
-                          subject,
-                          host,
-                          port,
-                          maskEmail(smtpUsername),
-                          maskEmail(effectiveFrom),
-                          smtpAuth,
-                          startTls,
-                          e.getClass().getSimpleName(),
-                          e.toString());
+            // All retries exhausted
+            if (lastException != null) {
+                  log.error("event=email_send_failed_all_retries to={} subject={} maxAttempts={} lastError={}",
+                          to, subject, maxAttempts, lastException.getMessage());
             }
       }
 
@@ -212,117 +249,154 @@ public class SmtpEmailSender implements EmailSender {
             String effectiveFrom = (configuredFrom != null && !configuredFrom.isBlank()) ? configuredFrom : smtpUsername;
             String bcc = (configuredBcc != null && !configuredBcc.isBlank()) ? configuredBcc.trim() : null;
 
-            try {
-                  var mime = mailSender.createMimeMessage();
-                  MimeMessageHelper helper = new MimeMessageHelper(mime, true, StandardCharsets.UTF_8.name());
+            // Retry logic for transient SSL/TLS failures
+            int maxAttempts = 3;
+            Exception lastException = null;
 
-                  if (effectiveFrom != null && !effectiveFrom.isBlank()) {
-                        String fromName = (configuredFromName != null && !configuredFromName.isBlank())
-                                ? configuredFromName.trim()
-                                : null;
+            for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+                  try {
+                        var mime = mailSender.createMimeMessage();
+                        MimeMessageHelper helper = new MimeMessageHelper(mime, true, StandardCharsets.UTF_8.name());
 
-                        if (fromName != null) {
-                              helper.setFrom(effectiveFrom, fromName);
-                        } else {
-                              helper.setFrom(effectiveFrom);
+                        if (effectiveFrom != null && !effectiveFrom.isBlank()) {
+                              String fromName = (configuredFromName != null && !configuredFromName.isBlank())
+                                      ? configuredFromName.trim()
+                                      : null;
+
+                              if (fromName != null) {
+                                    helper.setFrom(effectiveFrom, fromName);
+                              } else {
+                                    helper.setFrom(effectiveFrom);
+                              }
+
                         }
-
-                  }
-                  helper.setTo(to);
-                  if (bcc != null) {
-                        helper.setBcc(bcc);
-                  }
-                  String safeSubject = normalizeToAscii(subject == null ? "" : subject);
-                  helper.setSubject(safeSubject);
-                  mime.setSubject(safeSubject, StandardCharsets.UTF_8.name());
-
-                  String safeBody = normalizeToAscii(body == null ? "" : body);
-                  helper.setText(safeBody, false);
-
-                  int attachedCount = 0;
-                  long totalAttachmentSize = 0;
-                  for (EmailAttachment att : attachments) {
-                        if (att == null) {
-                              continue;
+                        helper.setTo(to);
+                        if (bcc != null) {
+                              helper.setBcc(bcc);
                         }
+                        String safeSubject = normalizeToAscii(subject == null ? "" : subject);
+                        helper.setSubject(safeSubject);
+                        mime.setSubject(safeSubject, StandardCharsets.UTF_8.name());
 
-                        String filename = (att.filename() == null || att.filename().isBlank()) ? "attachment" : att.filename();
-                        final String filenameFinal = filename;
-                        String contentType = (att.contentType() == null || att.contentType().isBlank()) ? "application/octet-stream" : att.contentType();
+                        String safeBody = normalizeToAscii(body == null ? "" : body);
+                        helper.setText(safeBody, false);
 
-                        if (att.bytes() != null) {
-                              byte[] bytes = att.bytes();
-                              helper.addAttachment(filenameFinal, new ByteArrayResource(bytes) {
-                                    @Override
-                                    public String getFilename() {
-                                          return filenameFinal;
-                                    }
-                              }, contentType);
+                        int attachedCount = 0;
+                        long totalAttachmentSize = 0;
+                        for (EmailAttachment att : attachments) {
+                              if (att == null) {
+                                    continue;
+                              }
+
+                              String filename = (att.filename() == null || att.filename().isBlank()) ? "attachment" : att.filename();
+                              final String filenameFinal = filename;
+                              String contentType = (att.contentType() == null || att.contentType().isBlank()) ? "application/octet-stream" : att.contentType();
+
+                              if (att.bytes() != null) {
+                                    byte[] bytes = att.bytes();
+                                    helper.addAttachment(filenameFinal, new ByteArrayResource(bytes) {
+                                          @Override
+                                          public String getFilename() {
+                                                return filenameFinal;
+                                          }
+                                    }, contentType);
+                                    attachedCount++;
+                                    totalAttachmentSize += bytes.length;
+                                    continue;
+                              }
+
+                              if (att.path() == null) {
+                                    continue;
+                              }
+
+                              File file = att.path().toFile();
+                              if (!file.exists() || !file.isFile()) {
+                                    log.warn("event=email_attachment_skipped reason=file_missing path={}", att.path());
+                                    continue;
+                              }
+
+                              if (att.filename() == null || att.filename().isBlank()) {
+                                    filename = file.getName();
+                              }
+
+                              helper.addAttachment(filename, new FileSystemResource(file), contentType);
                               attachedCount++;
-                              totalAttachmentSize += bytes.length;
-                              continue;
+                              totalAttachmentSize += file.length();
                         }
 
-                        if (att.path() == null) {
-                              continue;
-                        }
+                        log.info("event=email_send_starting to={} subject={} attachmentCount={} totalAttachmentSizeBytes={} attempt={}", to, subject, attachedCount, totalAttachmentSize, attempt);
+                        mailSender.send(mime);
+                        log.info(
+                                "event=email_sent_with_attachments to={} bcc={} subject={} attachmentCount={} smtpHost={} smtpPort={} smtpUser={} from={} authEnabled={} startTlsEnabled={} charset={} attempt={}",
+                                to,
+                                maskEmail(bcc),
+                                subject,
+                                attachedCount,
+                                host,
+                                port,
+                                maskEmail(smtpUsername),
+                                maskEmail(effectiveFrom),
+                                smtpAuth,
+                                startTls,
+                                StandardCharsets.UTF_8.name(),
+                                attempt);
+                        return; // Success, exit retry loop
+                  } catch (MailException e) {
+                        lastException = e;
+                        String errorMsg = e.getMessage() != null ? e.getMessage() : "";
+                        boolean isRetryable = errorMsg.contains("SSLHandshakeException")
+                                || errorMsg.contains("Could not convert socket to TLS")
+                                || errorMsg.contains("Remote host terminated the handshake")
+                                || errorMsg.contains("Connection reset");
 
-                        File file = att.path().toFile();
-                        if (!file.exists() || !file.isFile()) {
-                              log.warn("event=email_attachment_skipped reason=file_missing path={}", att.path());
-                              continue;
+                        if (isRetryable && attempt < maxAttempts) {
+                              long delayMs = 1000L * attempt * attempt; // Exponential backoff: 1s, 4s, 9s
+                              log.warn("event=email_send_retry to={} subject={} attempt={} maxAttempts={} delayMs={} error={}",
+                                      to, subject, attempt, maxAttempts, delayMs, e.getMessage());
+                              try {
+                                    Thread.sleep(delayMs);
+                              } catch (InterruptedException ie) {
+                                    Thread.currentThread().interrupt();
+                                    break;
+                              }
+                        } else {
+                              log.error(
+                                      "event=email_send_failed to={} subject={} smtpHost={} smtpPort={} smtpUser={} from={} authEnabled={} startTlsEnabled={} errorType={} error={} attempt={}",
+                                      to,
+                                      subject,
+                                      host,
+                                      port,
+                                      maskEmail(smtpUsername),
+                                      maskEmail(effectiveFrom),
+                                      smtpAuth,
+                                      startTls,
+                                      e.getClass().getSimpleName(),
+                                      e.getMessage(),
+                                      attempt);
+                              return;
                         }
-
-                        if (att.filename() == null || att.filename().isBlank()) {
-                              filename = file.getName();
-                        }
-
-                        helper.addAttachment(filename, new FileSystemResource(file), contentType);
-                        attachedCount++;
-                        totalAttachmentSize += file.length();
+                  } catch (Exception e) {
+                        log.error(
+                                "event=email_send_failed to={} subject={} smtpHost={} smtpPort={} smtpUser={} from={} authEnabled={} startTlsEnabled={} errorType={} error={} attempt={}",
+                                to,
+                                subject,
+                                host,
+                                port,
+                                maskEmail(smtpUsername),
+                                maskEmail(effectiveFrom),
+                                smtpAuth,
+                                startTls,
+                                e.getClass().getSimpleName(),
+                                e.toString(),
+                                attempt);
+                        return; // Non-retryable exception
                   }
+            }
 
-                  log.info("event=email_send_starting to={} subject={} attachmentCount={} totalAttachmentSizeBytes={}", to, subject, attachedCount, totalAttachmentSize);
-                  mailSender.send(mime);
-                  log.info(
-                          "event=email_sent_with_attachments to={} bcc={} subject={} attachmentCount={} smtpHost={} smtpPort={} smtpUser={} from={} authEnabled={} startTlsEnabled={} charset={}",
-                          to,
-                          maskEmail(bcc),
-                          subject,
-                          attachedCount,
-                          host,
-                          port,
-                          maskEmail(smtpUsername),
-                          maskEmail(effectiveFrom),
-                          smtpAuth,
-                          startTls,
-                          StandardCharsets.UTF_8.name());
-            } catch (MailException e) {
-                  log.error(
-                          "event=email_send_failed to={} subject={} smtpHost={} smtpPort={} smtpUser={} from={} authEnabled={} startTlsEnabled={} errorType={} error={}",
-                          to,
-                          subject,
-                          host,
-                          port,
-                          maskEmail(smtpUsername),
-                          maskEmail(effectiveFrom),
-                          smtpAuth,
-                          startTls,
-                          e.getClass().getSimpleName(),
-                          e.getMessage());
-            } catch (Exception e) {
-                  log.error(
-                          "event=email_send_failed to={} subject={} smtpHost={} smtpPort={} smtpUser={} from={} authEnabled={} startTlsEnabled={} errorType={} error={}",
-                          to,
-                          subject,
-                          host,
-                          port,
-                          maskEmail(smtpUsername),
-                          maskEmail(effectiveFrom),
-                          smtpAuth,
-                          startTls,
-                          e.getClass().getSimpleName(),
-                          e.toString());
+            // All retries exhausted
+            if (lastException != null) {
+                  log.error("event=email_send_failed_all_retries to={} subject={} maxAttempts={} lastError={}",
+                          to, subject, maxAttempts, lastException.getMessage());
             }
       }
 

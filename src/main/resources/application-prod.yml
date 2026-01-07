@@ -4,6 +4,16 @@ spring:
     username: ${DB_USERNAME:?DB_USERNAME env var is required}
     password: ${DB_PASSWORD:?DB_PASSWORD env var is required}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      # Increase housekeeping period to 5 minutes to avoid "Thread starvation or clock leap detected" warnings
+      # in cloud environments where container pauses can cause timing issues
+      housekeeping-period-ms: 300000
+      # Reduce the frequency of validation to minimize pool overhead
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      minimum-idle: 2
+      maximum-pool-size: 10
 
   jpa:
     hibernate:
