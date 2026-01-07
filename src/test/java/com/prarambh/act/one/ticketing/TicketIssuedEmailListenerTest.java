@@ -46,6 +46,13 @@ class TicketIssuedEmailListenerTest {
             deliveries.add(to + "|" + subject + "|" + body);
         }
 
+        @Override
+        public synchronized void send(String to, String subject, String body, List<EmailAttachment> attachments) {
+            // Record basic info; attachments presence indicates ticket-card generation path executed.
+            int attachmentCount = attachments == null ? 0 : attachments.size();
+            deliveries.add(to + "|" + subject + "|" + body + "|attachments=" + attachmentCount);
+        }
+
         boolean awaitDeliveryCount(int expected, long timeoutMs) throws InterruptedException {
             long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs);
             while (System.nanoTime() < deadline) {
@@ -73,6 +80,22 @@ class TicketIssuedEmailListenerTest {
             int first = last.indexOf('|');
             int second = last.indexOf('|', first + 1);
             return second >= 0 ? last.substring(second + 1) : null;
+        }
+
+        synchronized Integer lastAttachmentCount() {
+            if (deliveries.isEmpty()) {
+                return null;
+            }
+            String last = deliveries.get(deliveries.size() - 1);
+            int idx = last.lastIndexOf("|attachments=");
+            if (idx < 0) {
+                return null;
+            }
+            try {
+                return Integer.parseInt(last.substring(idx + "|attachments=".length()));
+            } catch (NumberFormatException e) {
+                return null;
+            }
         }
     }
 

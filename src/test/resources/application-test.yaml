@@ -37,4 +37,4 @@ actone:
       enabled: false
   ticket-card:
     enabled: true
-    templateResource: "classpath:/static/Card.png"
+    templateResource: "classpath:/static/Card.jpg"

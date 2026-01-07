@@ -76,11 +76,12 @@ SMTP settings:
 - `ACTONE_SMTP_STARTTLS_REQUIRED` (default: `true`)
 - `ACTONE_SMTP_SSL_TRUST` (default: uses `ACTONE_SMTP_HOST`)
 
-#### Ticket card PNG generation
+#### Ticket card generation
 - `ACTONE_TICKET_CARD_ENABLED` (default: `true`)
-- `ACTONE_TICKET_CARD_OUTPUT_DIR`
-  - If unset, PNGs are written to the OS temp dir under `actone-ticket-cards`.
-- `ACTONE_TICKET_CARD_TEMPLATE` (default: `classpath:/static/Card.png`)
+- `ACTONE_TICKET_CARD_TEMPLATE` (default: `classpath:/static/Card.jpg`)
+  - The service will prefer `classpath:/static/Card.jpg` if present (recommended for production).
+- `ACTONE_TICKET_CARD_MAX_PARALLEL` (default: `3`)
+  - Bounded parallelism used for card generation (email attachments + ZIP downloads)
 
 ---
 
