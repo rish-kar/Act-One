@@ -59,9 +59,9 @@ actone:
     bcc: ${ACTONE_EMAIL_BCC:}
   ticket-card:
     enabled: ${ACTONE_TICKET_CARD_ENABLED:true}
-    # Default output dir no longer writes to project root.
-    outputDir: ${ACTONE_TICKET_CARD_OUTPUT_DIR:}
-    templateResource: ${ACTONE_TICKET_CARD_TEMPLATE:classpath:/static/Card.png}
+    templateResource: ${ACTONE_TICKET_CARD_TEMPLATE:classpath:/static/Card.jpg}
+    # Max parallel threads used for generating ticket card images (email + downloads)
+    max-parallel: ${ACTONE_TICKET_CARD_MAX_PARALLEL:3}
 
 management:
   endpoints:

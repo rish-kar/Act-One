@@ -3,26 +3,13 @@ package com.prarambh.act.one.ticketing.controller;
 import com.prarambh.act.one.ticketing.model.Ticket;
 import com.prarambh.act.one.ticketing.repository.TicketRepository;
 import com.prarambh.act.one.ticketing.service.card.TicketCardGenerator;
-import java.awt.Graphics2D;
-import java.awt.image.BufferedImage;
-import java.io.BufferedInputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Comparator;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
-import javax.imageio.IIOImage;
-import javax.imageio.ImageIO;
-import javax.imageio.ImageWriteParam;
-import javax.imageio.ImageWriter;
-import javax.imageio.stream.ImageOutputStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ContentDisposition;
@@ -121,16 +108,15 @@ public class TicketCardDownloadController {
 
                     // Retry up to 4 total attempts (first try + 3 retries)
                     for (int attempt = 1; attempt <= 4; attempt++) {
-                        Path png = null;
                         try {
-                            png = ticketCardGenerator.generateTicketCardPng(t);
-                            if (png == null || !Files.exists(png)) {
-                                throw new IOException("Generated PNG missing for ticketId=" + t.getTicketId());
+                            byte[] jpg = ticketCardGenerator.generateTicketCardJpegBytes(t);
+                            if (jpg == null || jpg.length == 0) {
+                                throw new IOException("Generated JPG missing/empty for ticketId=" + t.getTicketId());
                             }
 
                             zos.putNextEntry(new ZipEntry(entryName));
                             try {
-                                writeJpgFromPngPath(png, zos);
+                                zos.write(jpg);
                                 success = true;
                                 break;
                             } finally {
@@ -144,33 +130,20 @@ public class TicketCardDownloadController {
                             lastError = e;
                             log.warn("event=ticket_card_zip_attempt_failed {} ticketId={} attempt={} error={}",
                                     logKey, t.getTicketId(), attempt, e.toString());
-
-                            // Best-effort cleanup between attempts
-                            // (Generator writes temp PNGs; remove them to prevent buildup)
-                        } finally {
-                            if (png != null) {
-                                try {
-                                    Files.deleteIfExists(png);
-                                } catch (Exception ignored) {
-                                    // ignore
-                                }
-                            }
                         }
 
-                        // Tiny backoff to avoid hammering disk/imageio in tight loops
+                        // Tiny backoff to avoid hammering CPU in tight loops
                         if (!success && attempt < 4) {
                             try {
                                 Thread.sleep(150L * attempt);
                             } catch (InterruptedException ie) {
                                 Thread.currentThread().interrupt();
-                                // If interrupted, abort because we can't guarantee completion.
                                 break;
                             }
                         }
                     }
 
                     if (!success) {
-                        // Do NOT return partial ZIPs.
                         String msg = "Failed to generate ticket card after retries for ticketId=" + t.getTicketId();
                         log.error("event=ticket_card_zip_aborting {} ticketId={} error={}", logKey, t.getTicketId(), String.valueOf(lastError));
                         throw new ResponseStatusException(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR, msg, lastError);
@@ -179,7 +152,6 @@ public class TicketCardDownloadController {
 
                 zos.finish();
             } catch (IOException e) {
-                // Client aborted or IO error while streaming
                 log.info("Streaming ZIP aborted for {} reason={}", logKey, e.toString());
                 throw e;
             }
@@ -187,58 +159,6 @@ public class TicketCardDownloadController {
 
         return ResponseEntity.ok().headers(headers).body(stream);
     }
-
-    /**
-     * Converts a PNG file on disk to a standards-compliant baseline JPEG stream.
-     *
-     * <p>Using an explicit ImageWriter avoids some environments producing slightly odd JPEGs.
-     */
-    private static void writeJpgFromPngPath(Path png, OutputStream out) throws IOException {
-        BufferedImage img;
-        try (InputStream in = new BufferedInputStream(Files.newInputStream(png))) {
-            img = ImageIO.read(in);
-        }
-        if (img == null) {
-            throw new IOException("ImageIO could not decode PNG: " + png);
-        }
-
-        // JPG doesn’t support alpha; flatten onto white background.
-        BufferedImage rgb = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_INT_RGB);
-        Graphics2D g = rgb.createGraphics();
-        try {
-            g.setColor(java.awt.Color.WHITE);
-            g.fillRect(0, 0, rgb.getWidth(), rgb.getHeight());
-            g.drawImage(img, 0, 0, null);
-        } finally {
-            g.dispose();
-        }
-
-        Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName("jpeg");
-        if (!writers.hasNext()) {
-            writers = ImageIO.getImageWritersByFormatName("jpg");
-        }
-        if (!writers.hasNext()) {
-            throw new IOException("No ImageIO writer available for jpeg/jpg");
-        }
-
-        ImageWriter writer = writers.next();
-        try (ImageOutputStream ios = ImageIO.createImageOutputStream(out)) {
-            writer.setOutput(ios);
-
-            ImageWriteParam param = writer.getDefaultWriteParam();
-            if (param.canWriteCompressed()) {
-                param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
-                // High quality but smaller than PNG; tweak if needed.
-                param.setCompressionQuality(0.9f);
-            }
-
-            writer.write(null, new IIOImage(rgb, null, null), param);
-            ios.flush();
-        } finally {
-            writer.dispose();
-        }
-    }
-
 
     private static byte[] toJsonBytes(Map<String, ?> payload) {
         // Minimal JSON since this endpoint usually returns ZIP. Avoids adding dependencies.

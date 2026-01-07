@@ -1,5 +1,7 @@
 package com.prarambh.act.one.ticketing;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.prarambh.act.one.ticketing.model.Ticket;
 import com.prarambh.act.one.ticketing.service.TicketIssuanceService;
 import java.math.BigDecimal;
@@ -7,8 +9,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
 class UserIdUniquenessIntegrationTest {

@@ -2,8 +2,8 @@ package com.prarambh.act.one.ticketing.service.card;
 
 import com.google.zxing.*;
 import com.google.zxing.common.BitMatrix;
-import com.google.zxing.oned.Code128Writer;
 import com.prarambh.act.one.ticketing.model.Ticket;
+import jakarta.annotation.PostConstruct;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics2D;
@@ -11,14 +11,16 @@ import java.awt.RenderingHints;
 import java.awt.font.FontRenderContext;
 import java.awt.font.TextLayout;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.EnumMap;
+import java.util.Iterator;
 import java.util.Map;
-import jakarta.annotation.PostConstruct;
+import javax.imageio.IIOImage;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
+import javax.imageio.stream.ImageOutputStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.Resource;
@@ -26,15 +28,15 @@ import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Service;
 
 /**
- * Generates a "ticket card" PNG by drawing a scannable code containing {@code qrCodeId}
- * (linear code plus QR where configured) and placing it onto a template image.
+ * Generates a "ticket card" JPG by drawing a scannable code containing {@code qrCodeId}
+ * (QR code) and placing it onto a template image.
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class TicketCardGenerator {
 
-    // NOTE: Card.png is the large poster template (coordinates below are based on that).
+    // NOTE: Card.jpg is the recommended poster template (coordinates below are based on that).
     // We do NOT render the legacy small 1D barcode box anymore.
 
     // (Legacy coordinate constants removed; we compute placement dynamically now.)
@@ -79,6 +81,10 @@ public class TicketCardGenerator {
     private volatile BufferedImage cachedTemplate;
     private final Object templateLock = new Object();
 
+    // Cached JPG template to avoid reloading/decoding for every ticket.
+    private volatile BufferedImage cachedJpgTemplate;
+    private final Object jpgTemplateLock = new Object();
+
     /**
      * Pre-load the template at startup to fail fast if there are issues
      * and to ensure ImageIO plugins are initialized.
@@ -104,12 +110,18 @@ public class TicketCardGenerator {
             loadTemplate();
             log.info("event=template_preload_complete");
         } catch (Exception e) {
-            log.error("event=template_preload_failed error={}", e.toString(), e);
+            log.error("event=template_preload_failed error={}", e, e);
             // Don't throw - allow app to start, but email card generation will fail
         }
     }
 
-    public Path generateTicketCardPng(Ticket ticket) {
+    /**
+     * Generate a ticket card as JPEG bytes (baseline JPEG).
+     *
+     * <p>This is the preferred method for email attachments: it avoids filesystem writes and is much faster in
+     * containerized environments.
+     */
+    public byte[] generateTicketCardJpegBytes(Ticket ticket) {
         if (!properties.enabled()) {
             log.debug("event=ticket_card_generation_skipped reason=disabled ticketId={} qrCodeId={}", ticket.getTicketId(), ticket.getQrCodeId());
             return null;
@@ -122,64 +134,34 @@ public class TicketCardGenerator {
             throw new IllegalArgumentException("ticketId must be present");
         }
 
-        BufferedImage template = loadTemplate();
+        BufferedImage template = loadJpgTemplate();
 
-        // Compute dynamic boxes from the real template dimensions.
         int templateW = template.getWidth();
         int templateH = template.getHeight();
 
-        // QR: center on X axis, reduce size, shift up by 2% (of base QR box height), and right by 1% (of template width).
         int qrRenderW = (int) Math.round(QR_BOX_W * QR_SCALE_FACTOR);
         int qrRenderH = (int) Math.round(QR_BOX_H * QR_SCALE_FACTOR);
         int qrX = (templateW - qrRenderW) / 2 + (int) Math.round(templateW * QR_X_RIGHT_FACTOR);
         int qrY = (int) Math.round(QR_Y_BASE - (QR_BOX_H * QR_Y_UP_FACTOR));
 
-        // Generate QR for the QR area using qrCodeId as the payload.
         BufferedImage qr = renderQrCode(ticket.getQrCodeId(), qrRenderW, qrRenderH);
 
-        BufferedImage out = new BufferedImage(template.getWidth(), template.getHeight(), BufferedImage.TYPE_INT_ARGB);
+        // Compose into RGB directly (JPEG output)
+        BufferedImage out = new BufferedImage(templateW, templateH, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = out.createGraphics();
         try {
-            // No interpolation for QR/linear code placement.
             g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
             g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_SPEED);
 
             g.drawImage(template, 0, 0, null);
-
-            // Draw QR in its dedicated area (no extra white rectangle outside the QR code itself).
-            // The QR image is "white modules on transparent background", so the template shows through.
             g.drawImage(qr, qrX, qrY, null);
-
-            // Ticket number label in new position.
             drawTicketId(g, ticket.getTicketId().toString(), templateW, templateH);
         } finally {
             g.dispose();
         }
 
-        Path outputDir = resolveOutputDir();
-        try {
-            Files.createDirectories(outputDir);
-        } catch (IOException e) {
-            throw new IllegalStateException("Failed to create output directory: " + outputDir, e);
-        }
-
-        Path output = outputDir.resolve("ticket-" + ticket.getTicketId() + ".png");
-        try {
-            // Convert to RGB for JPEG (no alpha channel support)
-            BufferedImage rgbImage = new BufferedImage(out.getWidth(), out.getHeight(), BufferedImage.TYPE_INT_RGB);
-            Graphics2D rgbG = rgbImage.createGraphics();
-            rgbG.drawImage(out, 0, 0, null);
-            rgbG.dispose();
-
-            // Write as PNG (lossless) to preserve existing behavior and tests.
-            javax.imageio.ImageIO.write(rgbImage, "png", Files.newOutputStream(output));
-        } catch (IOException e) {
-            throw new IllegalStateException("Failed to write ticket card image to " + output, e);
-        }
-
-        log.info("event=ticket_card_generated path={} ticketId={} qrCodeId={}", output, ticket.getTicketId(), ticket.getQrCodeId());
-        return output;
+        return encodeJpeg(out, 0.88f);
     }
 
     private BufferedImage loadTemplate() {
@@ -196,7 +178,7 @@ public class TicketCardGenerator {
             }
 
             String resourcePath = properties.templateResource() == null || properties.templateResource().isBlank()
-                    ? "classpath:/static/Card.png"
+                    ? "classpath:/static/Card.jpg"
                     : properties.templateResource();
 
             Resource resource = resourceLoader.getResource(resourcePath);
@@ -229,80 +211,54 @@ public class TicketCardGenerator {
                     return img;
                 }
             } catch (IOException e) {
-                log.error("event=template_load_io_error resourcePath={} error={}", resourcePath, e.toString(), e);
+                log.error("event=template_load_io_error resourcePath={} error={}", resourcePath, e, e);
                 throw new IllegalStateException("Failed to load template image: " + resourcePath, e);
             }
         }
     }
 
-    /**
-     * Renders a machine-readable Code 128 symbol with controlled quiet zones.
-     *
-     * <p>Critical properties:
-     * <ul>
-     *   <li>Natural-width encoding (no forced stretching)</li>
-     *   <li>Integer-only scaling (preserves bar/space ratios)</li>
-     *   <li>Clean white canvas (quiet zone not polluted by borders)</li>
-     * </ul>
-     */
-    private static BufferedImage renderCode128(String contents, int targetW, int targetH, int quiet, int minScale, int maxScale) {
-        Map<EncodeHintType, Object> hints = new EnumMap<>(EncodeHintType.class);
-        hints.put(EncodeHintType.MARGIN, 0); // we handle quiet zones ourselves
-
-        BitMatrix bm;
-        try {
-            bm = new Code128Writer().encode(contents, BarcodeFormat.CODE_128, 1, 60, hints);
-        } catch (RuntimeException e) {
-            // ZXing may throw unchecked exceptions for invalid inputs; wrap for clarity.
-            throw new IllegalStateException("Failed to encode code symbol", e);
+    private BufferedImage loadJpgTemplate() {
+        BufferedImage template = cachedJpgTemplate;
+        if (template != null) {
+            return template;
         }
 
-        int mw = bm.getWidth();
-        int mh = bm.getHeight();
-
-        // Determine integer scale that fits inside target with explicit left/right quiet zones.
-        int maxScaleX = (targetW - (2 * quiet)) / mw;
-        int maxScaleY = targetH / mh;
-        int scale = Math.min(maxScaleX, maxScaleY);
-
-        if (scale < minScale) {
-            scale = minScale;
-        }
-        if (maxScale > 0) {
-            scale = Math.min(scale, maxScale);
-        }
-
-        int renderW = mw * scale;
-        int renderH = mh * scale;
-
-        int x0 = (targetW - renderW) / 2;
-        int y0 = (targetH - renderH) / 2;
-
-        // Clean white canvas (TYPE_INT_RGB => no alpha blending / no partial pixels)
-        BufferedImage out = new BufferedImage(targetW, targetH, BufferedImage.TYPE_INT_RGB);
-        Graphics2D g = out.createGraphics();
-        try {
-            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
-            g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_OFF);
-            g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_SPEED);
-
-            g.setColor(Color.WHITE);
-            g.fillRect(0, 0, targetW, targetH);
-
-            g.setColor(Color.BLACK);
-            for (int y = 0; y < mh; y++) {
-                for (int x = 0; x < mw; x++) {
-                    if (bm.get(x, y)) {
-                        g.fillRect(x0 + (x * scale), y0 + (y * scale), scale, scale);
-                    }
-                }
+        synchronized (jpgTemplateLock) {
+            template = cachedJpgTemplate;
+            if (template != null) {
+                return template;
             }
-        } finally {
-            g.dispose();
-        }
 
-        return out;
+            // Prefer Card.jpg if present; fall back to the configured template if missing/invalid.
+            String preferred = "classpath:/static/Card.jpg";
+            Resource preferredRes = resourceLoader.getResource(preferred);
+
+            try {
+                if (preferredRes.exists()) {
+                    try (InputStream is = preferredRes.getInputStream()) {
+                        byte[] bytes = is.readAllBytes();
+                        log.info("event=template_resource_loaded resourcePath={} sizeBytes={}", preferred, bytes.length);
+                        BufferedImage img = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(bytes));
+                        if (img != null) {
+                            cachedJpgTemplate = img;
+                            return img;
+                        }
+                        log.warn("event=template_decode_failed resourcePath={} reason=imageio_null", preferred);
+                    }
+                } else {
+                    log.warn("event=template_resource_missing resourcePath={}", preferred);
+                }
+            } catch (Exception e) {
+                log.warn("event=template_load_failed resourcePath={} error={}", preferred, e.toString());
+            }
+
+            // Fall back to existing template logic (png or configured) to avoid hard failure.
+            template = loadTemplate();
+            cachedJpgTemplate = template;
+            return template;
+        }
     }
+
 
     private static BufferedImage renderQrCode(String contents, int targetW, int targetH) {
         Map<EncodeHintType, Object> hints = new EnumMap<>(EncodeHintType.class);
@@ -424,16 +380,35 @@ public class TicketCardGenerator {
         }
     }
 
+    private static byte[] encodeJpeg(BufferedImage rgb, float quality) {
+        try {
+            Iterator<ImageWriter> writers = javax.imageio.ImageIO.getImageWritersByFormatName("jpeg");
+            if (!writers.hasNext()) {
+                writers = javax.imageio.ImageIO.getImageWritersByFormatName("jpg");
+            }
+            if (!writers.hasNext()) {
+                throw new IllegalStateException("No ImageIO writer available for jpeg/jpg");
+            }
 
-    private Path resolveOutputDir() {
-        String configured = properties.outputDir();
-        if (configured == null || configured.isBlank()) {
-            // Avoid writing generated files into the repo/app working directory by default.
-            // Use OS temp dir instead (safe for local dev and CI).
-            return Paths.get(System.getProperty("java.io.tmpdir"), "actone-ticket-cards")
-                    .toAbsolutePath()
-                    .normalize();
+            ImageWriter writer = writers.next();
+            try {
+                ByteArrayOutputStream baos = new ByteArrayOutputStream(256 * 1024);
+                try (ImageOutputStream ios = javax.imageio.ImageIO.createImageOutputStream(baos)) {
+                    writer.setOutput(ios);
+                    ImageWriteParam param = writer.getDefaultWriteParam();
+                    if (param.canWriteCompressed()) {
+                        param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+                        param.setCompressionQuality(Math.max(0.1f, Math.min(1.0f, quality)));
+                    }
+                    writer.write(null, new IIOImage(rgb, null, null), param);
+                    ios.flush();
+                }
+                return baos.toByteArray();
+            } finally {
+                writer.dispose();
+            }
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to encode JPEG", e);
         }
-        return Paths.get(configured).toAbsolutePath().normalize();
     }
 }

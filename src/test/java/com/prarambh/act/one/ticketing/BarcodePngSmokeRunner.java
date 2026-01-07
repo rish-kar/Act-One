@@ -1,13 +1,14 @@
 package com.prarambh.act.one.ticketing;
 
 import com.prarambh.act.one.ticketing.model.Ticket;
-import com.prarambh.act.one.ticketing.model.TicketStatus;
 import com.prarambh.act.one.ticketing.service.card.TicketCardGenerator;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.UUID;
 
 /**
- * Simple manual runner to generate a single ticket PNG for visual inspection.
+ * Simple manual runner to generate a single ticket JPG for visual inspection.
  * Not a test.
  */
 public final class BarcodePngSmokeRunner {
@@ -18,7 +19,6 @@ public final class BarcodePngSmokeRunner {
     public static void main(String[] args) {
         // Enable ticket card generation and force output to project root.
         System.setProperty("actone.ticket-card.enabled", "true");
-        System.setProperty("actone.ticket-card.outputDir", ".");
 
         org.springframework.boot.builder.SpringApplicationBuilder app = new org.springframework.boot.builder.SpringApplicationBuilder(com.prarambh.act.one.ActOneApplication.class)
                 .profiles("test")
@@ -33,11 +33,16 @@ public final class BarcodePngSmokeRunner {
             t.setFullName("Barcode Smoke");
             t.setEmail("test@example.com");
             t.setPhoneNumber("9999999999");
-            t.setStatus(TicketStatus.ISSUED);
             t.setQrCodeId("TEST12345678901234");
 
-            Path p = generator.generateTicketCardPng(t);
-            System.out.println("Generated: " + p.toAbsolutePath());
+            byte[] jpg = generator.generateTicketCardJpegBytes(t);
+            Path p = Paths.get("ticket-" + t.getTicketId() + ".jpg").toAbsolutePath();
+            try {
+                Files.write(p, jpg);
+            } catch (java.io.IOException e) {
+                throw new RuntimeException("Failed to write " + p, e);
+            }
+            System.out.println("Generated: " + p);
             System.out.println("Barcode value: " + t.getQrCodeId());
         }
     }

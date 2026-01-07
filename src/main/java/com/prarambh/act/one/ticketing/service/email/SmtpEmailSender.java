@@ -6,6 +6,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.mail.MailException;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -29,7 +30,6 @@ import org.springframework.stereotype.Service;
 public class SmtpEmailSender implements EmailSender {
 
       private final org.springframework.mail.javamail.JavaMailSender mailSender;
-      private final EmailProperties emailProperties;
 
       @Value("${spring.mail.host:}")
       private String host;
@@ -242,16 +242,40 @@ public class SmtpEmailSender implements EmailSender {
                   int attachedCount = 0;
                   long totalAttachmentSize = 0;
                   for (EmailAttachment att : attachments) {
-                        if (att == null || att.path() == null) {
+                        if (att == null) {
                               continue;
                         }
+
+                        String filename = (att.filename() == null || att.filename().isBlank()) ? "attachment" : att.filename();
+                        final String filenameFinal = filename;
+                        String contentType = (att.contentType() == null || att.contentType().isBlank()) ? "application/octet-stream" : att.contentType();
+
+                        if (att.bytes() != null) {
+                              byte[] bytes = att.bytes();
+                              helper.addAttachment(filenameFinal, new ByteArrayResource(bytes) {
+                                    @Override
+                                    public String getFilename() {
+                                          return filenameFinal;
+                                    }
+                              }, contentType);
+                              attachedCount++;
+                              totalAttachmentSize += bytes.length;
+                              continue;
+                        }
+
+                        if (att.path() == null) {
+                              continue;
+                        }
+
                         File file = att.path().toFile();
                         if (!file.exists() || !file.isFile()) {
                               log.warn("event=email_attachment_skipped reason=file_missing path={}", att.path());
                               continue;
                         }
-                        String filename = (att.filename() == null || att.filename().isBlank()) ? file.getName() : att.filename();
-                        String contentType = (att.contentType() == null || att.contentType().isBlank()) ? "application/octet-stream" : att.contentType();
+
+                        if (att.filename() == null || att.filename().isBlank()) {
+                              filename = file.getName();
+                        }
 
                         helper.addAttachment(filename, new FileSystemResource(file), contentType);
                         attachedCount++;

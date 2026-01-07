@@ -1,18 +1,22 @@
 package com.prarambh.act.one.ticketing.service.email;
 
-import com.prarambh.act.one.ticketing.model.Ticket;
 import com.prarambh.act.one.ticketing.model.EmailQuoteType;
+import com.prarambh.act.one.ticketing.model.Ticket;
 import com.prarambh.act.one.ticketing.service.TicketPurchaseCheckedInEvent;
 import com.prarambh.act.one.ticketing.service.TicketPurchaseIssuedEvent;
 import com.prarambh.act.one.ticketing.service.card.TicketCardGenerator;
 import com.prarambh.act.one.ticketing.service.quotes.QuoteSelectionService;
 import com.prarambh.act.one.ticketing.service.quotes.TheatreQuote;
-import java.nio.file.Path;
-import java.time.format.DateTimeFormatter;
-import java.util.List;
 
+import java.time.format.*;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
@@ -30,6 +34,13 @@ public class TicketPurchaseEmailListener {
       private final EmailProperties emailProperties;
       private final TicketCardGenerator ticketCardGenerator;
       private final QuoteSelectionService quoteSelectionService;
+
+      /**
+       * Bounded pool size for CPU-heavy image generation.
+       * Configurable via env var ACTONE_TICKET_CARD_MAX_PARALLEL (defaults to 3).
+       */
+      @Value("${actone.ticket-card.max-parallel:3}")
+      private int maxParallelCardGen;
 
       /**
        * Listener that sends an email after tickets are issued. Runs asynchronously after commit.
@@ -63,29 +74,85 @@ public class TicketPurchaseEmailListener {
 
             log.info("event=purchase_issue_email_attempt to={} ticketCount={} firstTicketId={}", to, tickets.size(), first.getTicketId());
 
-            // Generate ticket cards sequentially to avoid thread pool issues in cloud environments
-            List<EmailSender.EmailAttachment> attachments = new java.util.ArrayList<>();
-            for (Ticket t : tickets) {
-                try {
-                    Path imgPath = ticketCardGenerator.generateTicketCardPng(t);
-                    if (imgPath != null) {
-                        attachments.add(new EmailSender.EmailAttachment("ticket-" + t.getTicketId() + ".jpg", "image/jpeg", imgPath));
-                    }
-                } catch (Exception e) {
-                    log.error("event=ticket_card_generation_failed ticketId={} qrCodeId={} error={}", t.getTicketId(), t.getQrCodeId(), e.toString(), e);
-                }
-            }
+            long startNs = System.nanoTime();
 
-            log.info("event=purchase_issue_email_attachments_ready to={} attachmentCount={}", to, attachments.size());
+            // Parallel, bounded, in-memory generation of JPG attachments.
+            int threads = Math.max(1, Math.min(maxParallelCardGen, tickets.size()));
+            log.info("event=purchase_issue_email_card_gen_start to={} ticketCount={} threads={} maxParallelCardGen={}",
+                    to, tickets.size(), threads, maxParallelCardGen);
+             ExecutorService pool = Executors.newFixedThreadPool(threads);
+             try {
+                   List<CompletableFuture<EmailSender.EmailAttachment>> futures = tickets.stream()
+                           .map(t -> CompletableFuture.supplyAsync(() -> generateAttachmentWithRetry(t, 4), pool))
+                           .toList();
 
-            try {
-                  String body = buildIssuedBody(tickets);
-                  log.info("event=purchase_issue_email_body_ready to={} bodyLength={}", to, body.length());
-                  emailSender.send(to, subject, body, attachments);
-                  log.info("event=purchase_issue_email_complete to={} ticketCount={}", to, tickets.size());
-            } catch (Exception e) {
-                  log.error("event=purchase_issue_email_failed to={} ticketCount={} error={}", to, tickets.size(), e.toString(), e);
+                   // Wait for all; if any fails we abort (complete-only).
+                   List<EmailSender.EmailAttachment> attachments = futures.stream().map(cf -> {
+                         try {
+                               // No artificial timeout (per your requirement). This will wait until done.
+                               return cf.join();
+                         } catch (Exception e) {
+                               throw e;
+                         }
+                   }).toList();
+
+                   long tookMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNs);
+                   long totalBytes = attachments.stream().mapToLong(a -> a.bytes() == null ? 0 : a.bytes().length).sum();
+                   log.info("event=purchase_issue_email_attachments_ready to={} attachmentCount={} totalBytes={} avgBytes={} tookMs={}",
+                          to,
+                          attachments.size(),
+                          totalBytes,
+                          attachments.isEmpty() ? 0 : (totalBytes / attachments.size()),
+                          tookMs);
+
+                   String body = buildIssuedBody(tickets);
+                   log.info("event=purchase_issue_email_body_ready to={} bodyLength={}", to, body.length());
+
+                  long sendStartNs = System.nanoTime();
+                   emailSender.send(to, subject, body, attachments);
+                  long sendTookMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - sendStartNs);
+                  log.info("event=purchase_issue_email_sender_done to={} sendTookMs={} attachmentCount={} totalBytes={}",
+                          to, sendTookMs, attachments.size(), totalBytes);
+                   log.info("event=purchase_issue_email_complete to={} ticketCount={}", to, tickets.size());
+             } catch (Exception e) {
+                   log.error("event=purchase_issue_email_failed to={} ticketCount={} error={}", to, tickets.size(), e.toString(), e);
+             } finally {
+                   pool.shutdown();
+             }
+       }
+
+      private EmailSender.EmailAttachment generateAttachmentWithRetry(Ticket t, int maxAttempts) {
+            Exception last = null;
+            for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+                  try {
+                         long genStartNs = System.nanoTime();
+                         byte[] jpg = ticketCardGenerator.generateTicketCardJpegBytes(t);
+                         long genTookMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - genStartNs);
+                         if (jpg == null || jpg.length == 0) {
+                               throw new IllegalStateException("Empty JPG bytes");
+                         }
+                         log.info("event=ticket_card_generated_bytes ticketId={} qrCodeId={} bytes={} tookMs={}",
+                                t.getTicketId(), t.getQrCodeId(), jpg.length, genTookMs);
+                         return EmailSender.EmailAttachment.fromBytes(
+                                 "ticket-" + t.getTicketId() + ".jpg",
+                                 "image/jpeg",
+                                 jpg);
+                  } catch (Exception e) {
+                        last = e;
+                        log.warn("event=ticket_card_generation_retry ticketId={} qrCodeId={} attempt={} error={}",
+                                t.getTicketId(), t.getQrCodeId(), attempt, e.toString());
+                        if (attempt < maxAttempts) {
+                              try {
+                                    Thread.sleep(150L * attempt);
+                              } catch (InterruptedException ie) {
+                                    Thread.currentThread().interrupt();
+                                    break;
+                              }
+                        }
+                  }
             }
+            log.error("event=ticket_card_generation_failed ticketId={} qrCodeId={} error={}", t.getTicketId(), t.getQrCodeId(), last != null ? last.toString() : "unknown", last);
+            throw new IllegalStateException("Failed to generate ticket card after retries for ticketId=" + t.getTicketId(), last);
       }
 
       /**
