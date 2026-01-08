@@ -1,6 +1,8 @@
 package com.prarambh.act.one.ticketing.controller;
 
+import com.prarambh.act.one.ticketing.model.Auditorium;
 import com.prarambh.act.one.ticketing.repository.TicketRepository;
+import com.prarambh.act.one.ticketing.service.AuditoriumService;
 import com.prarambh.act.one.ticketing.service.ShowIdGenerator;
 import com.prarambh.act.one.ticketing.service.ShowSettingsService;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +32,7 @@ public class AdminController {
 
     private final TicketRepository ticketRepository;
     private final ShowSettingsService showSettingsService;
+    private final AuditoriumService auditoriumService;
 
     /** Shared secret used for admin endpoints. Configure via actone.admin.purge-password. */
     @Value("${actone.admin.purge-password:}")
@@ -71,6 +74,11 @@ public class AdminController {
         long before = ticketRepository.count();
         ticketRepository.deleteAllInBatch();
         log.warn("Admin purge executed successfully: deletedCount={} ", before);
+
+        // Recalculate all auditoriums immediately after purging all tickets.
+        for (Auditorium auditorium : auditoriumService.findAll()) {
+            auditoriumService.recalc(auditorium.getAuditoriumId());
+        }
 
         return ResponseEntity.ok(java.util.Map.of(
                 "message", "All tickets deleted",

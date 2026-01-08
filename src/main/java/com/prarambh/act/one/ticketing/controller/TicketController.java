@@ -6,6 +6,7 @@ import com.prarambh.act.one.ticketing.model.Ticket;
 import com.prarambh.act.one.ticketing.model.TicketStatus;
 import com.prarambh.act.one.ticketing.repository.AuditoriumRepository;
 import com.prarambh.act.one.ticketing.repository.TicketRepository;
+import com.prarambh.act.one.ticketing.service.AuditoriumService;
 import com.prarambh.act.one.ticketing.service.ShowSettingsService;
 import com.prarambh.act.one.ticketing.service.TicketCheckInService;
 import com.prarambh.act.one.ticketing.service.TicketIssuanceService;
@@ -54,6 +55,7 @@ public class TicketController {
     private final TicketIssuanceService ticketIssuanceService;
     private final TicketCheckInService ticketCheckInService;
     private final AuditoriumRepository auditoriumRepository;
+    private final AuditoriumService auditoriumService;
     private final ApplicationEventPublisher eventPublisher;
 
     @Value("${actone.admin.purge-password:}")
@@ -141,6 +143,11 @@ public class TicketController {
 
         List<Ticket> savedTickets = ticketIssuanceService.issueTickets(ticket);
         Ticket primary = savedTickets.get(0);
+
+        // Update auditorium seat counts immediately after ticket creation/issuance.
+        if (primary.getShowId() != null) {
+            auditoriumService.recalcByShowIdIfPresent(primary.getShowId());
+        }
 
         log.info(
                 "event=ticket_recorded ticketId={} qrCodeId={} showId={} showName={} status={} ticketCount={} userId={}",
@@ -465,6 +472,12 @@ public class TicketController {
 
         ticketRepository.saveAll(tickets);
         triggerStatusEmailsIfNeeded(tickets, oldStatuses);
+
+        // Update auditorium seat counts immediately after tickets are modified.
+        if (!tickets.isEmpty() && tickets.get(0).getShowId() != null) {
+            auditoriumService.recalcByShowIdIfPresent(tickets.get(0).getShowId());
+        }
+
         return ResponseEntity.ok(tickets.stream().map(TicketResponse::from).toList());
     }
 
@@ -512,6 +525,12 @@ public class TicketController {
 
         ticketRepository.saveAll(tickets);
         triggerStatusEmailsIfNeeded(tickets, oldStatuses);
+
+        // Update auditorium seat counts immediately after tickets are modified.
+        if (!tickets.isEmpty() && tickets.get(0).getShowId() != null) {
+            auditoriumService.recalcByShowIdIfPresent(tickets.get(0).getShowId());
+        }
+
         return ResponseEntity.ok(tickets.stream().map(TicketResponse::from).toList());
     }
 
@@ -533,7 +552,15 @@ public class TicketController {
         }
 
         int count = tickets.size();
+        String showId = tickets.isEmpty() ? null : tickets.get(0).getShowId();
+
         ticketRepository.deleteAllInBatch(tickets);
+
+        // Update auditorium seat counts immediately after tickets are deleted.
+        if (showId != null) {
+            auditoriumService.recalcByShowIdIfPresent(showId);
+        }
+
         return ResponseEntity.ok(Map.of("message", "deleted", "userId", userId, "deletedCount", count));
     }
 
@@ -558,7 +585,16 @@ public class TicketController {
             return ResponseEntity.status(404).body(Map.of("message", "Ticket not found", "ticketId", ticketId));
         }
 
-        ticketRepository.delete(existing.get());
+        Ticket ticket = existing.get();
+        String showId = ticket.getShowId();
+
+        ticketRepository.delete(ticket);
+
+        // Update auditorium seat counts immediately after ticket is deleted.
+        if (showId != null) {
+            auditoriumService.recalcByShowIdIfPresent(showId);
+        }
+
         return ResponseEntity.ok(Map.of("message", "deleted", "ticketId", ticketId));
     }
 
@@ -634,6 +670,11 @@ public class TicketController {
         ticketRepository.saveAll(matched);
 
         triggerStatusEmailsIfNeeded(matched, oldStatuses);
+
+        // Update auditorium seat counts immediately after tickets are modified.
+        if (!matched.isEmpty() && matched.get(0).getShowId() != null) {
+            auditoriumService.recalcByShowIdIfPresent(matched.get(0).getShowId());
+        }
 
         return ResponseEntity.ok(matched.stream().map(TicketResponse::from).toList());
     }

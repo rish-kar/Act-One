@@ -141,6 +141,18 @@ public class UserService {
     public void deleteById(Long id){ repo.deleteById(id); }
 
     /**
+     * Delete all users.
+     *
+     * @return count of deleted users
+     */
+    @Transactional
+    public long deleteAll(){
+        long count = repo.count();
+        repo.deleteAllInBatch();
+        return count;
+    }
+
+    /**
      * Resolve a stable userId for a person based on identity: fullName + email + phone (last 10 digits).
      *
      * <p>Contract:

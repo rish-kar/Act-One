@@ -38,8 +38,11 @@ public class AuditoriumService {
 
     private static int clampNonNegative(int v) { return Math.max(0, v); }
 
-    public static int computeAvailable(int total, int reserved, int booked, int confirmed) {
-        int used = clampNonNegative(reserved) + clampNonNegative(booked) + clampNonNegative(confirmed);
+    public static int computeAvailable(int total, int reserved, int booked, int confirmed, int checkedIn) {
+        int used = clampNonNegative(reserved)
+                + clampNonNegative(booked)
+                + clampNonNegative(confirmed)
+                + clampNonNegative(checkedIn);
         return Math.max(0, clampNonNegative(total) - used);
     }
 
@@ -110,21 +113,34 @@ public class AuditoriumService {
     private void recalcInto(Auditorium a) {
         String showId = a.getShowId();
 
-        // Compute by loading all tickets and filtering by showId.
+        // Count tickets from the tickets table by status for this show.
         var all = ticketRepository.findAll();
         int bookedSeats = 0;
         int confirmedSeats = 0;
         int checkedInSeats = 0;
         for (var t : all) {
             if (t.getShowId() == null || !t.getShowId().equals(showId)) continue;
-            if (t.getStatus() == TicketStatus.TRANSACTION_MADE || t.getStatus() == TicketStatus.TRANSACTION_PENDING) bookedSeats++;
-            if (t.getStatus() == TicketStatus.ISSUED) confirmedSeats++;
-            if (t.getStatus() == TicketStatus.USED) checkedInSeats++;
+            if (t.getStatus() == TicketStatus.TRANSACTION_MADE || t.getStatus() == TicketStatus.TRANSACTION_PENDING) {
+                bookedSeats++;
+            } else if (t.getStatus() == TicketStatus.ISSUED) {
+                confirmedSeats++;
+            } else if (t.getStatus() == TicketStatus.USED) {
+                checkedInSeats++;
+            }
         }
+
+        // Pull totalSeats and reservedSeats from the auditorium table (already set).
+        int totalSeats = a.getTotalSeats();
+        int reservedSeats = a.getReservedSeats();
+
+        // Update the auditorium table columns with computed counts.
         a.setBookedSeats(bookedSeats);
         a.setConfirmedSeats(confirmedSeats);
         a.setCheckedInSeats(checkedInSeats);
-        a.setAvailableSeats(computeAvailable(a.getTotalSeats(), a.getReservedSeats(), bookedSeats, confirmedSeats));
+
+        // Calculate and update available seats.
+        int availableSeats = computeAvailable(totalSeats, reservedSeats, bookedSeats, confirmedSeats, checkedInSeats);
+        a.setAvailableSeats(availableSeats);
     }
 
     @Transactional
