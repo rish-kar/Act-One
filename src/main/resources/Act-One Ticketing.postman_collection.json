@@ -393,7 +393,7 @@
 										"{{userId}}"
 									]
 								},
-								"description": "Generated from cURL: curl --location --request PUT 'http://localhost:8080/api/tickets/by-user/E051D84B' --header 'X-Admin-Password: prarambh-admin-delhi' --header 'Content-Type: application/json' --data-raw '{ \"showName\":\"Updated Show\", \"showId\":\"SHOW-UPDATED-ABC123\", \"auditoriumId\":\"AUD-TEST001\", \"fullName\":\"Updated Name\", \"email\":\"updated@example.com\", \"phoneNumber\":\"+91-9916604905\", \"ticketCount\":3, \"transactionId\":\"TXN-UPDATED-1\", \"ticketAmount\":750, \"status\":\"TRANSACTION_MADE\" }'\r\n"
+								"description": "Generated from cURL: curl --location --request PUT 'http://localhost:8080/api/tickets/by-user/E051D84B' --header 'X-Admin-Password: {{admin-password}}' --header 'Content-Type: application/json' --data-raw '{ \"showName\":\"Updated Show\", \"showId\":\"SHOW-UPDATED-ABC123\", \"auditoriumId\":\"AUD-TEST001\", \"fullName\":\"Updated Name\", \"email\":\"updated@example.com\", \"phoneNumber\":\"+91-9916604905\", \"ticketCount\":3, \"transactionId\":\"TXN-UPDATED-1\", \"ticketAmount\":750, \"status\":\"TRANSACTION_MADE\" }'\r\n"
 							},
 							"response": []
 						},
@@ -432,7 +432,7 @@
 										"{{userId}}"
 									]
 								},
-								"description": "Generated from cURL: curl --location --request PATCH 'http://localhost:8080/api/tickets/by-user/E051D84B' --header 'X-Admin-Password: prarambh-admin-delhi' --header 'Content-Type: application/json' --data-raw '{ \"phoneNumber\":\"+91-9999999999\", \"ticketAmount\":800 }'"
+								"description": "Generated from cURL: curl --location --request PATCH 'http://localhost:8080/api/tickets/by-user/E051D84B' --header 'X-Admin-Password: {{admin-password}}' --header 'Content-Type: application/json' --data-raw '{ \"phoneNumber\":\"+91-9999999999\", \"ticketAmount\":800 }'"
 							},
 							"response": []
 						},
@@ -458,7 +458,7 @@
 										"{{userId}}"
 									]
 								},
-								"description": "Generated from cURL: curl --location --request DELETE 'http://localhost:8080/api/tickets/by-user/E051D84B' --header 'X-Admin-Password: prarambh-admin-delhi'\r\n"
+								"description": "Generated from cURL: curl --location --request DELETE 'http://localhost:8080/api/tickets/by-user/E051D84B' --header 'X-Admin-Password: {{admin-password}}'\r\n"
 							},
 							"response": []
 						},
@@ -483,7 +483,7 @@
 										"{{ticketId}}"
 									]
 								},
-								"description": "Generated from cURL: curl --location --request DELETE 'http://localhost:8080/api/tickets/by-user/E051D84B' --header 'X-Admin-Password: prarambh-admin-delhi'\r\n"
+								"description": "Generated from cURL: curl --location --request DELETE 'http://localhost:8080/api/tickets/by-user/E051D84B' --header 'X-Admin-Password: {{admin-password}}'\r\n"
 							},
 							"response": []
 						}
@@ -690,7 +690,7 @@
 										}
 									]
 								},
-								"description": "Generated from cURL: curl --location --request POST 'http://localhost:8080/api/resend-email/by-name-and-transaction?fullName=John%20Doe&transactionId=TXN-12345678' \\\r\n--header 'X-Admin-Password: prarambh-admin-delhi'\r\n"
+								"description": "Generated from cURL: curl --location --request POST 'http://localhost:8080/api/resend-email/by-name-and-transaction?fullName=John%20Doe&transactionId=TXN-12345678' \\\r\n--header 'X-Admin-Password: {{admin-password}}'\r\n"
 							},
 							"response": []
 						}
@@ -1561,7 +1561,7 @@
 										"transactions"
 									]
 								},
-								"description": "Generated from cURL: curl --location --request GET 'http://localhost:8080/api/transactions/{userId}/transactions' -H 'X-Admin-Password: prarambh-admin-delhi'\r\n"
+								"description": "Generated from cURL: curl --location --request GET 'http://localhost:8080/api/transactions/{userId}/transactions' -H 'X-Admin-Password: {{admin-password}}'\r\n"
 							},
 							"response": []
 						},
@@ -1588,7 +1588,7 @@
 										"validate"
 									]
 								},
-								"description": "Generated from cURL: curl --location --request POST 'http://localhost:8080/api/transactions/by-transaction/{transactionId}/validate' -H 'X-Admin-Password: prarambh-admin-delhi'\r\n"
+								"description": "Generated from cURL: curl --location --request POST 'http://localhost:8080/api/transactions/by-transaction/{transactionId}/validate' -H 'X-Admin-Password: {{admin-password}}'\r\n"
 							},
 							"response": []
 						},
@@ -1615,7 +1615,7 @@
 										"checkin"
 									]
 								},
-								"description": "Generated from cURL: curl --location --request POST 'http://localhost:8080/api/transactions/by-transaction/{transactionId}/checkin' -H 'X-Admin-Password: prarambh-admin-delhi'\r\n"
+								"description": "Generated from cURL: curl --location --request POST 'http://localhost:8080/api/transactions/by-transaction/{transactionId}/checkin' -H 'X-Admin-Password: {{admin-password}}'\r\n"
 							},
 							"response": []
 						},
@@ -1641,7 +1641,7 @@
 										"{{transactionId}}"
 									]
 								},
-								"description": "Generated from cURL: curl --location --request GET 'http://localhost:8080/api/transactions/by-transaction/{transactionId}' -H 'X-Admin-Password: prarambh-admin-delhi'\r\n"
+								"description": "Generated from cURL: curl --location --request GET 'http://localhost:8080/api/transactions/by-transaction/{transactionId}' -H 'X-Admin-Password: {{admin-password}}'\r\n"
 							},
 							"response": []
 						},
@@ -1711,7 +1711,7 @@
 										"feedback"
 									]
 								},
-								"description": "Generated from cURL: curl --location 'http://localhost:8080/api/feedback' --header 'X-Admin-Password: prarambh-admin-delhi'"
+								"description": "Generated from cURL: curl --location 'http://localhost:8080/api/feedback' --header 'X-Admin-Password: {{admin-password}}'"
 							},
 							"response": []
 						},
@@ -1769,7 +1769,7 @@
 										"{id}"
 									]
 								},
-								"description": "Generated from cURL: curl --location --request DELETE 'http://localhost:8080/api/feedback/{id}' --header 'X-Admin-Password: prarambh-admin-delhi'\r\n"
+								"description": "Generated from cURL: curl --location --request DELETE 'http://localhost:8080/api/feedback/{id}' --header 'X-Admin-Password: {{admin-password}}'\r\n"
 							},
 							"response": []
 						}
@@ -1868,7 +1868,7 @@
 						"header": [
 							{
 								"key": "X-Admin-Password",
-								"value": "prarambh-admin-delhi"
+								"value": "{{admin-password}}"
 							},
 							{
 								"key": "Content-Type",
@@ -1894,7 +1894,7 @@
 								"auditoriums"
 							]
 						},
-						"description": "Generated from cURL: curl --location 'http://localhost:8080/api/auditoriums' --header 'X-Admin-Password: prarambh-admin-delhi' --header 'Content-Type: application/json' --data '{\"showId\":\"SHOW-2025-001\",\"auditoriumName\":\"Main Auditorium\",\"showDate\":\"2025-12-29\",\"showTime\":\"19:00:00\",\"totalSeats\":200,\"reservedSeats\":10}'"
+						"description": "Generated from cURL: curl --location 'http://localhost:8080/api/auditoriums' --header 'X-Admin-Password: {{admin-password}}' --header 'Content-Type: application/json' --data '{\"showId\":\"SHOW-2025-001\",\"auditoriumName\":\"Main Auditorium\",\"showDate\":\"2025-12-29\",\"showTime\":\"19:00:00\",\"totalSeats\":200,\"reservedSeats\":10}'"
 					},
 					"response": []
 				},
@@ -1920,7 +1920,7 @@
 								"recalculate"
 							]
 						},
-						"description": "Generated from cURL: curl --location --request POST 'http://localhost:8080/api/auditoriums/{auditoriumId}/recalculate' --header 'X-Admin-Password: prarambh-admin-delhi'"
+						"description": "Generated from cURL: curl --location --request POST 'http://localhost:8080/api/auditoriums/{auditoriumId}/recalculate' --header 'X-Admin-Password: {{admin-password}}'"
 					},
 					"response": []
 				},
@@ -1931,7 +1931,7 @@
 						"header": [
 							{
 								"key": "X-Admin-Password",
-								"value": "prarambh-admin-delhi"
+								"value": "{{admin-password}}"
 							}
 						],
 						"url": {
@@ -1945,7 +1945,7 @@
 								"{{auditoriumId}}"
 							]
 						},
-						"description": "Generated from cURL: curl --location 'http://localhost:8080/api/auditoriums/{auditoriumId}' --header 'X-Admin-Password: prarambh-admin-delhi'\r\n"
+						"description": "Generated from cURL: curl --location 'http://localhost:8080/api/auditoriums/{auditoriumId}' --header 'X-Admin-Password: {{admin-password}}'\r\n"
 					},
 					"response": []
 				},
@@ -2054,7 +2054,7 @@
 								"auditoriums"
 							]
 						},
-						"description": "Generated from cURL: curl --location 'http://localhost:8080/api/auditoriums/{auditoriumId}' --header 'X-Admin-Password: prarambh-admin-delhi'\r\n"
+						"description": "Generated from cURL: curl --location 'http://localhost:8080/api/auditoriums/{auditoriumId}' --header 'X-Admin-Password: {{admin-password}}'\r\n"
 					},
 					"response": []
 				},
@@ -2080,7 +2080,7 @@
 								"total-seats"
 							]
 						},
-						"description": "Generated from cURL: curl --location 'http://localhost:8080/api/auditoriums/{auditoriumId}/total-seats' --header 'X-Admin-Password: prarambh-admin-delhi'\r\n"
+						"description": "Generated from cURL: curl --location 'http://localhost:8080/api/auditoriums/{auditoriumId}/total-seats' --header 'X-Admin-Password: {{admin-password}}'\r\n"
 					},
 					"response": []
 				},
@@ -2106,7 +2106,7 @@
 								"available-seats"
 							]
 						},
-						"description": "Generated from cURL: curl --location 'http://localhost:8080/api/auditoriums/{auditoriumId}/available-seats' --header 'X-Admin-Password: prarambh-admin-delhi'\r\n"
+						"description": "Generated from cURL: curl --location 'http://localhost:8080/api/auditoriums/{auditoriumId}/available-seats' --header 'X-Admin-Password: {{admin-password}}'\r\n"
 					},
 					"response": []
 				},
@@ -2144,7 +2144,7 @@
 								"{{auditoriumId}}"
 							]
 						},
-						"description": "Generated from cURL: curl --location --request PUT 'http://localhost:8080/api/auditoriums/{auditoriumId}' --header 'X-Admin-Password: prarambh-admin-delhi' --header 'Content-Type: application/json' --data '{\"showId\":\"SHOW-2025-001\",\"auditoriumName\":\"Main Auditorium\",\"showDate\":\"2025-12-30\",\"showTime\":\"20:00:00\",\"totalSeats\":220,\"reservedSeats\":15}'\r\n"
+						"description": "Generated from cURL: curl --location --request PUT 'http://localhost:8080/api/auditoriums/{auditoriumId}' --header 'X-Admin-Password: {{admin-password}}' --header 'Content-Type: application/json' --data '{\"showId\":\"SHOW-2025-001\",\"auditoriumName\":\"Main Auditorium\",\"showDate\":\"2025-12-30\",\"showTime\":\"20:00:00\",\"totalSeats\":220,\"reservedSeats\":15}'\r\n"
 					},
 					"response": []
 				},
@@ -2182,7 +2182,7 @@
 								"{{auditoriumId}}"
 							]
 						},
-						"description": "Generated from cURL: curl --location --request PATCH 'http://localhost:8080/api/auditoriums/{auditoriumId}' --header 'X-Admin-Password: prarambh-admin-delhi' --header 'Content-Type: application/json' --data '{\"reservedSeats\":25}'\r\n"
+						"description": "Generated from cURL: curl --location --request PATCH 'http://localhost:8080/api/auditoriums/{auditoriumId}' --header 'X-Admin-Password: {{admin-password}}' --header 'Content-Type: application/json' --data '{\"reservedSeats\":25}'\r\n"
 					},
 					"response": []
 				},
@@ -2207,7 +2207,7 @@
 								"{{auditoriumId}}"
 							]
 						},
-						"description": "Generated from cURL: curl --location --request DELETE 'http://localhost:8080/api/auditoriums/{auditoriumId}' --header 'X-Admin-Password: prarambh-admin-delhi'\r\n"
+						"description": "Generated from cURL: curl --location --request DELETE 'http://localhost:8080/api/auditoriums/{auditoriumId}' --header 'X-Admin-Password: {{admin-password}}'\r\n"
 					},
 					"response": []
 				}
