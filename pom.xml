@@ -142,6 +142,9 @@
 					<!-- Windows/OneDrive-friendly: avoid forked JVMs that can linger and lock target/ -->
 					<forkCount>0</forkCount>
 					<reuseForks>false</reuseForks>
+					<systemPropertyVariables>
+						<ACTONE_ADMIN_PASSWORD>${ACTONE_ADMIN_PASSWORD}</ACTONE_ADMIN_PASSWORD>
+					</systemPropertyVariables>
 				</configuration>
 			</plugin>
 		</plugins>
