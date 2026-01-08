@@ -49,7 +49,7 @@ class FeedbackControllerIntegrationTest {
 
         client.get()
                 .uri("/api/feedback")
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", "{{admin-password}}")
                 .exchange()
                 .expectStatus().isOk()
                 .expectBodyList(Map.class)

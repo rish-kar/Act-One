@@ -38,7 +38,7 @@ class AdminControllerIntegrationTest {
     void manageShowName() {
         // Set show name
         client.post().uri("/api/admin/show-name")
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", "{{admin-password}}")
                 .bodyValue(Map.of("showName", "Admin Test Show", "showDate", "2025-12-31", "showTime", "18:00"))
                 .exchange()
                 .expectStatus().isOk()
@@ -50,7 +50,7 @@ class AdminControllerIntegrationTest {
 
         // Get show name
         client.get().uri("/api/admin/show-name")
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", "{{admin-password}}")
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(Map.class)
@@ -58,14 +58,14 @@ class AdminControllerIntegrationTest {
 
         // Clear show name
         client.post().uri("/api/admin/show-name")
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", "{{admin-password}}")
                 .bodyValue(Map.of("clear", true))
                 .exchange()
                 .expectStatus().isOk();
 
         // Verify cleared
         client.get().uri("/api/admin/show-name")
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", "{{admin-password}}")
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(Map.class)
@@ -89,7 +89,7 @@ class AdminControllerIntegrationTest {
 
         // Purge
         client.delete().uri("/api/admin/tickets")
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", "{{admin-password}}")
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(Map.class)

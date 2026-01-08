@@ -42,7 +42,7 @@ class AuditoriumControllerIntegrationTest {
                 .exchange().expectStatus().isForbidden();
 
         Map created = client.post().uri("/api/auditoriums")
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", "{{admin-password}}")
                 .bodyValue(Map.of(
                         "auditoriumName", "Main Auditorium",
                         "showName", "Test Show",
@@ -59,7 +59,7 @@ class AuditoriumControllerIntegrationTest {
         String auditoriumId = created.get("auditoriumId").toString();
 
         client.get().uri("/api/auditoriums/{id}", auditoriumId)
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", "{{admin-password}}")
                 .exchange().expectStatus().isOk()
                 .expectBody(Map.class)
                 .value(body -> {
@@ -68,7 +68,7 @@ class AuditoriumControllerIntegrationTest {
                 });
 
         client.get().uri("/api/auditoriums/{id}/available-seats", auditoriumId)
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", "{{admin-password}}")
                 .exchange().expectStatus().isOk()
                 .expectBody(Map.class)
                 .value(body -> assertThat(body.get("availableSeats")).isNotNull());
@@ -78,7 +78,7 @@ class AuditoriumControllerIntegrationTest {
     void deleteAuditoriumRequiresAdmin() {
         // Create one first
         Map created = client.post().uri("/api/auditoriums")
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", "{{admin-password}}")
                 .bodyValue(Map.of(
                         "auditoriumName", "Delete Me",
                         "showName", "Delete Show",
@@ -98,12 +98,12 @@ class AuditoriumControllerIntegrationTest {
 
         // Delete with admin -> 200
         client.delete().uri("/api/auditoriums/{id}", id)
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", "{{admin-password}}")
                 .exchange().expectStatus().isOk();
 
         // Get -> 404
         client.get().uri("/api/auditoriums/{id}", id)
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", "{{admin-password}}")
                 .exchange().expectStatus().isNotFound();
     }
 }

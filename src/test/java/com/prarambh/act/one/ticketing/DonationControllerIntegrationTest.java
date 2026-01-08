@@ -112,7 +112,7 @@ class DonationControllerIntegrationTest {
 
         // Delete with admin
         client.delete().uri("/api/donations/{id}", id)
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", "{{admin-password}}")
                 .exchange()
                 .expectStatus().isOk();
 

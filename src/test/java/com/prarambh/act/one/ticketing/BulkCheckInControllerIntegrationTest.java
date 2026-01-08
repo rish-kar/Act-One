@@ -69,7 +69,7 @@ class BulkCheckInControllerIntegrationTest {
 
         // Validate
         client.post().uri("/api/transactions/{userId}/validate", userId)
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", "{{admin-password}}")
                 .exchange()
                 .expectStatus().isOk();
 

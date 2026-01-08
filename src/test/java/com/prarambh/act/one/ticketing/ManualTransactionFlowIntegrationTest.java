@@ -58,7 +58,7 @@ class ManualTransactionFlowIntegrationTest {
         // 2) list successful transactions includes this userId
         List<Map> list = webTestClient.get()
                 .uri("/api/transactions/successful")
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", "{{admin-password}}")
                 .exchange()
                 .expectStatus().isOk()
                 .expectBodyList(Map.class)

@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -40,6 +41,13 @@ public class UserController {
 
     @PutMapping("/api/users/{id}")
     public ResponseEntity<?> update(@PathVariable Long id, @RequestBody User u, @RequestHeader(name = "X-Admin-Password", required = false) String pass){
+        if (!isAdmin(pass)) return ResponseEntity.status(HttpStatus.FORBIDDEN).body("admin password required");
+        try{ return ResponseEntity.ok(service.updateUser(id, u)); } catch(IllegalArgumentException e){ return ResponseEntity.badRequest().body(e.getMessage()); }
+    }
+
+    // Support PATCH (partial update) using the same service.updateUser semantics (only non-empty fields are applied)
+    @PatchMapping("/api/users/{id}")
+    public ResponseEntity<?> patch(@PathVariable Long id, @RequestBody User u, @RequestHeader(name = "X-Admin-Password", required = false) String pass){
         if (!isAdmin(pass)) return ResponseEntity.status(HttpStatus.FORBIDDEN).body("admin password required");
         try{ return ResponseEntity.ok(service.updateUser(id, u)); } catch(IllegalArgumentException e){ return ResponseEntity.badRequest().body(e.getMessage()); }
     }

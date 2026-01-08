@@ -98,7 +98,7 @@ Create a user (admin-only):
 ```bash
 curl -X POST 'http://localhost:8080/api/users' \
   -H 'Content-Type: application/json' \
-  -H 'X-Admin-Password: prarambh-admin-delhi' \
+  -H 'X-Admin-Password: {{admin-password}}' \
   --data '{"fullName":"John Doe","phoneNumber":"9876543210","email":"john@example.com"}'
 ```
 
@@ -106,14 +106,14 @@ Delete a single user (admin-only):
 
 ```bash
 curl -X DELETE 'http://localhost:8080/api/users/123' \
-  -H 'X-Admin-Password: prarambh-admin-delhi'
+  -H 'X-Admin-Password: {{admin-password}}'
 ```
 
 Delete ALL users (admin-only) — careful with this one:
 
 ```bash
 curl --location --request DELETE 'http://localhost:8080/api/users/' \
-  --header 'X-Admin-Password: prarambh-admin-delhi'
+  --header 'X-Admin-Password: {{admin-password}}'
 ```
 
 Resend ticket-issue email by full name + transactionId (admin-only). This endpoint will:
@@ -123,7 +123,7 @@ Resend ticket-issue email by full name + transactionId (admin-only). This endpoi
 
 ```bash
 curl --location --request POST 'http://localhost:8080/api/resend-email/by-name-and-transaction?fullName=John%20Doe&transactionId=TXN-1234' \
-  --header 'X-Admin-Password: prarambh-admin-delhi'
+  --header 'X-Admin-Password: {{admin-password}}'
 ```
 
 Issue tickets (public-facing; returns the created ticket rows):
