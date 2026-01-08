@@ -2,6 +2,7 @@ package com.prarambh.act.one.ticketing;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.prarambh.act.one.ticketing.support.TestAdminPasswordProvider;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -49,11 +50,10 @@ class FeedbackControllerIntegrationTest {
 
         client.get()
                 .uri("/api/feedback")
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", TestAdminPasswordProvider.adminPassword())
                 .exchange()
                 .expectStatus().isOk()
                 .expectBodyList(Map.class)
                 .value(list -> assertThat(list.size()).isGreaterThanOrEqualTo(1));
     }
 }
-

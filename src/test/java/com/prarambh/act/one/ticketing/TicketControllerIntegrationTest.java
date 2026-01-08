@@ -2,6 +2,7 @@ package com.prarambh.act.one.ticketing;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.prarambh.act.one.ticketing.support.TestAdminPasswordProvider;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,6 +33,7 @@ class TicketControllerIntegrationTest {
     void issuingReturnsTicketId() {
         Map body = webTestClient.post()
                 .uri("/api/tickets/issue")
+                .header("X-Admin-Password", TestAdminPasswordProvider.adminPassword())
                 .bodyValue(issueRequestPayload())
                 .exchange()
                 .expectStatus().isOk()
@@ -56,6 +58,7 @@ class TicketControllerIntegrationTest {
         // So we expect some results.
 
         webTestClient.get().uri("/api/tickets/shows")
+                .header("X-Admin-Password", TestAdminPasswordProvider.adminPassword())
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(java.util.List.class)

@@ -2,6 +2,7 @@ package com.prarambh.act.one.ticketing;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.prarambh.act.one.ticketing.support.TestAdminPasswordProvider;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -47,7 +48,7 @@ class SuffixCheckInControllerIntegrationTest {
 
         // Validate
         client.post().uri("/api/transactions/{userId}/validate", userId)
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", TestAdminPasswordProvider.adminPassword())
                 .exchange()
                 .expectStatus().isOk();
 
@@ -78,4 +79,3 @@ class SuffixCheckInControllerIntegrationTest {
                 .expectStatus().isBadRequest();
     }
 }
-

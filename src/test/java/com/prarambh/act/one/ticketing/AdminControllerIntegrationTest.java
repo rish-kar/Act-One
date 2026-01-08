@@ -2,6 +2,7 @@ package com.prarambh.act.one.ticketing;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.prarambh.act.one.ticketing.support.TestAdminPasswordProvider;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,7 +39,7 @@ class AdminControllerIntegrationTest {
     void manageShowName() {
         // Set show name
         client.post().uri("/api/admin/show-name")
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", TestAdminPasswordProvider.adminPassword())
                 .bodyValue(Map.of("showName", "Admin Test Show", "showDate", "2025-12-31", "showTime", "18:00"))
                 .exchange()
                 .expectStatus().isOk()
@@ -50,7 +51,7 @@ class AdminControllerIntegrationTest {
 
         // Get show name
         client.get().uri("/api/admin/show-name")
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", TestAdminPasswordProvider.adminPassword())
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(Map.class)
@@ -58,14 +59,14 @@ class AdminControllerIntegrationTest {
 
         // Clear show name
         client.post().uri("/api/admin/show-name")
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", TestAdminPasswordProvider.adminPassword())
                 .bodyValue(Map.of("clear", true))
                 .exchange()
                 .expectStatus().isOk();
 
         // Verify cleared
         client.get().uri("/api/admin/show-name")
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", TestAdminPasswordProvider.adminPassword())
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(Map.class)
@@ -89,7 +90,7 @@ class AdminControllerIntegrationTest {
 
         // Purge
         client.delete().uri("/api/admin/tickets")
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", TestAdminPasswordProvider.adminPassword())
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(Map.class)
@@ -103,4 +104,3 @@ class AdminControllerIntegrationTest {
                 .value(list -> assertThat(list).isEmpty());
     }
 }
-

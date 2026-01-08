@@ -1,0 +1,2828 @@
+{
+	"info": {
+		"_postman_id": "330ff5d4-6cf3-492d-a52b-cd18234da466",
+		"name": "Act-One Ticketing",
+		"description": "Act-One Ticketing API collection for managing tickets, transactions, auditoriums, donations, and feedback.\n\nGetting started\n- Set the active environment to Act One and ensure these variables are defined:\n  - baseUrl (e.g., http://localhost:8080)\n  - admin-password (string)\n- Requests inherit baseUrl via {{baseUrl}} and any admin password usage should reference {{admin-password}}.\n\nNotes\n- Collection-level pre-request script generates a uniqueEmail for test runs.\n- All localhost URLs have been normalized to use {{baseUrl}}.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "39727841"
+	},
+	"item": [
+		{
+			"name": "Ticketing",
+			"item": [
+				{
+					"name": "Tickets",
+					"item": [
+						{
+							"name": "Check-in Ticket by Ticket Id",
+							"event": [
+								{
+									"listen": "prerequest",
+									"script": {
+										"exec": [
+											"// Ensure ticketId is present; if not, fail early so user runs Issue Ticket first",
+											"const tid = pm.collectionVariables.get('ticketId');",
+											"if (!tid) {",
+											"  throw new Error('ticketId collection variable is not set. Run \"Issue Ticket\" first.');",
+											"}",
+											"",
+											"// Track whether this is the first or second check-in call in this run",
+											"let attempt = pm.collectionVariables.get('checkinAttempt');",
+											"attempt = attempt ? Number(attempt) + 1 : 1;",
+											"pm.collectionVariables.set('checkinAttempt', String(attempt));"
+										],
+										"type": "text/javascript",
+										"packages": {},
+										"requests": {}
+									}
+								},
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"let jsonData = null;",
+											"try {",
+											"  jsonData = pm.response.json();",
+											"} catch (e) {",
+											"  // leave as null; some implementations may not return JSON",
+											"}",
+											"",
+											"const attempt = Number(pm.collectionVariables.get('checkinAttempt') || '1');",
+											"",
+											"if (attempt === 1) {",
+											"  pm.test('First check-in: status is 200', function () {",
+											"    pm.response.to.have.status(200);",
+											"  });",
+											"",
+											"  pm.test('First check-in: body indicates success/VALID/USED', function () {",
+											"    pm.expect(jsonData, 'First check-in should return JSON body').to.be.an('object');",
+											"    const statusVal = jsonData.status || jsonData.result || jsonData.state;",
+											"    pm.expect(statusVal, 'status/result/state should indicate USED or VALID').to.be.oneOf(['USED', 'VALID', 'SUCCESS', 'OK']);",
+											"  });",
+											"} else {",
+											"  pm.test('Second check-in: status is 200 or 400 or 409', function () {",
+											"    pm.expect([200, 400, 409]).to.include(pm.response.code);",
+											"  });",
+											"",
+											"  pm.test('Second check-in: body indicates already used / invalid', function () {",
+											"    pm.expect(jsonData, 'Second check-in should return JSON body').to.be.an('object');",
+											"    const statusVal = (jsonData.status || jsonData.result || jsonData.error || '').toString().toUpperCase();",
+											"    const msg = (jsonData.message || jsonData.errorDescription || '').toString().toUpperCase();",
+											"    pm.expect(statusVal + ' ' + msg, 'Must mention already used / invalid').to.satisfy(function (combined) {",
+											"      return combined.includes('ALREADY') || combined.includes('USED') || combined.includes('INVALID');",
+											"    });",
+											"  });",
+											"}"
+										],
+										"type": "text/javascript",
+										"packages": {},
+										"requests": {}
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/api/tickets/{{ticketId}}/checkin",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"tickets",
+										"{{ticketId}}",
+										"checkin"
+									]
+								},
+								"description": "Checks in a ticket by its `ticketId`.\n\nPurpose:\n- Mark a ticket as used/checked-in.\n\nPath params:\n- `ticketId` – UUID of the ticket, stored as a collection variable from the Issue Ticket request.\n\nExpected success response (first check-in):\n- 200 OK with JSON body indicating success. Common patterns:\n  - `{ \"status\": \"USED\" }`\n  - `{ \"result\": \"VALID\" }`\n\nExpected duplicate / idempotency behavior (second check-in):\n- 200 OK, 400, or 409 (all treated as acceptable).\n- Body indicates that ticket is already used / invalid for re-entry (e.g. `ALREADY_USED`, `INVALID`, etc.).\n\nError cases:\n- 400 / 404 / 409 depending on implementation if ticket does not exist or is in an invalid state."
+							},
+							"response": []
+						},
+						{
+							"name": "Check-in Ticket by QR Code Id",
+							"event": [
+								{
+									"listen": "prerequest",
+									"script": {
+										"exec": [
+											"// Ensure ticketId is present; if not, fail early so user runs Issue Ticket first",
+											"const tid = pm.collectionVariables.get('ticketId');",
+											"if (!tid) {",
+											"  throw new Error('ticketId collection variable is not set. Run \"Issue Ticket\" first.');",
+											"}",
+											"",
+											"// Track whether this is the first or second check-in call in this run",
+											"let attempt = pm.collectionVariables.get('checkinAttempt');",
+											"attempt = attempt ? Number(attempt) + 1 : 1;",
+											"pm.collectionVariables.set('checkinAttempt', String(attempt));"
+										],
+										"type": "text/javascript",
+										"packages": {},
+										"requests": {}
+									}
+								},
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"let jsonData = null;",
+											"try {",
+											"  jsonData = pm.response.json();",
+											"} catch (e) {",
+											"  // leave as null; some implementations may not return JSON",
+											"}",
+											"",
+											"const attempt = Number(pm.collectionVariables.get('checkinAttempt') || '1');",
+											"",
+											"if (attempt === 1) {",
+											"  pm.test('First check-in: status is 200', function () {",
+											"    pm.response.to.have.status(200);",
+											"  });",
+											"",
+											"  pm.test('First check-in: body indicates success/VALID/USED', function () {",
+											"    pm.expect(jsonData, 'First check-in should return JSON body').to.be.an('object');",
+											"    const statusVal = jsonData.status || jsonData.result || jsonData.state;",
+											"    pm.expect(statusVal, 'status/result/state should indicate USED or VALID').to.be.oneOf(['USED', 'VALID', 'SUCCESS', 'OK']);",
+											"  });",
+											"} else {",
+											"  pm.test('Second check-in: status is 200 or 400 or 409', function () {",
+											"    pm.expect([200, 400, 409]).to.include(pm.response.code);",
+											"  });",
+											"",
+											"  pm.test('Second check-in: body indicates already used / invalid', function () {",
+											"    pm.expect(jsonData, 'Second check-in should return JSON body').to.be.an('object');",
+											"    const statusVal = (jsonData.status || jsonData.result || jsonData.error || '').toString().toUpperCase();",
+											"    const msg = (jsonData.message || jsonData.errorDescription || '').toString().toUpperCase();",
+											"    pm.expect(statusVal + ' ' + msg, 'Must mention already used / invalid').to.satisfy(function (combined) {",
+											"      return combined.includes('ALREADY') || combined.includes('USED') || combined.includes('INVALID');",
+											"    });",
+											"  });",
+											"}"
+										],
+										"type": "text/javascript",
+										"packages": {},
+										"requests": {}
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/api/tickets/qrcode/{{qrCodeId}}/checkin",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"tickets",
+										"qrcode",
+										"{{qrCodeId}}",
+										"checkin"
+									]
+								},
+								"description": "Checks in a ticket by its `ticketId`.\n\nPurpose:\n- Mark a ticket as used/checked-in.\n\nPath params:\n- `ticketId` – UUID of the ticket, stored as a collection variable from the Issue Ticket request.\n\nExpected success response (first check-in):\n- 200 OK with JSON body indicating success. Common patterns:\n  - `{ \"status\": \"USED\" }`\n  - `{ \"result\": \"VALID\" }`\n\nExpected duplicate / idempotency behavior (second check-in):\n- 200 OK, 400, or 409 (all treated as acceptable).\n- Body indicates that ticket is already used / invalid for re-entry (e.g. `ALREADY_USED`, `INVALID`, etc.).\n\nError cases:\n- 400 / 404 / 409 depending on implementation if ticket does not exist or is in an invalid state."
+							},
+							"response": []
+						},
+						{
+							"name": "Check-in Ticket by Last 5 Digits of Ticket ID",
+							"event": [
+								{
+									"listen": "prerequest",
+									"script": {
+										"exec": [
+											"// Ensure ticketId is present; if not, fail early so user runs Issue Ticket first",
+											"const tid = pm.collectionVariables.get('ticketId');",
+											"if (!tid) {",
+											"  throw new Error('ticketId collection variable is not set. Run \"Issue Ticket\" first.');",
+											"}",
+											"",
+											"// Track whether this is the first or second check-in call in this run",
+											"let attempt = pm.collectionVariables.get('checkinAttempt');",
+											"attempt = attempt ? Number(attempt) + 1 : 1;",
+											"pm.collectionVariables.set('checkinAttempt', String(attempt));"
+										],
+										"type": "text/javascript",
+										"packages": {},
+										"requests": {}
+									}
+								},
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"let jsonData = null;",
+											"try {",
+											"  jsonData = pm.response.json();",
+											"} catch (e) {",
+											"  // leave as null; some implementations may not return JSON",
+											"}",
+											"",
+											"const attempt = Number(pm.collectionVariables.get('checkinAttempt') || '1');",
+											"",
+											"if (attempt === 1) {",
+											"  pm.test('First check-in: status is 200', function () {",
+											"    pm.response.to.have.status(200);",
+											"  });",
+											"",
+											"  pm.test('First check-in: body indicates success/VALID/USED', function () {",
+											"    pm.expect(jsonData, 'First check-in should return JSON body').to.be.an('object');",
+											"    const statusVal = jsonData.status || jsonData.result || jsonData.state;",
+											"    pm.expect(statusVal, 'status/result/state should indicate USED or VALID').to.be.oneOf(['USED', 'VALID', 'SUCCESS', 'OK']);",
+											"  });",
+											"} else {",
+											"  pm.test('Second check-in: status is 200 or 400 or 409', function () {",
+											"    pm.expect([200, 400, 409]).to.include(pm.response.code);",
+											"  });",
+											"",
+											"  pm.test('Second check-in: body indicates already used / invalid', function () {",
+											"    pm.expect(jsonData, 'Second check-in should return JSON body').to.be.an('object');",
+											"    const statusVal = (jsonData.status || jsonData.result || jsonData.error || '').toString().toUpperCase();",
+											"    const msg = (jsonData.message || jsonData.errorDescription || '').toString().toUpperCase();",
+											"    pm.expect(statusVal + ' ' + msg, 'Must mention already used / invalid').to.satisfy(function (combined) {",
+											"      return combined.includes('ALREADY') || combined.includes('USED') || combined.includes('INVALID');",
+											"    });",
+											"  });",
+											"}"
+										],
+										"type": "text/javascript",
+										"packages": {},
+										"requests": {}
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/api/checkin/ticket-suffix/c1133",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"checkin",
+										"ticket-suffix",
+										"c1133"
+									]
+								},
+								"description": "Checks in a ticket by its `ticketId`.\n\nPurpose:\n- Mark a ticket as used/checked-in.\n\nPath params:\n- `ticketId` – UUID of the ticket, stored as a collection variable from the Issue Ticket request.\n\nExpected success response (first check-in):\n- 200 OK with JSON body indicating success. Common patterns:\n  - `{ \"status\": \"USED\" }`\n  - `{ \"result\": \"VALID\" }`\n\nExpected duplicate / idempotency behavior (second check-in):\n- 200 OK, 400, or 409 (all treated as acceptable).\n- Body indicates that ticket is already used / invalid for re-entry (e.g. `ALREADY_USED`, `INVALID`, etc.).\n\nError cases:\n- 400 / 404 / 409 depending on implementation if ticket does not exist or is in an invalid state."
+							},
+							"response": []
+						},
+						{
+							"name": "Check-in Tickets by Phone Number",
+							"event": [
+								{
+									"listen": "prerequest",
+									"script": {
+										"exec": [
+											"// Ensure ticketId is present; if not, fail early so user runs Issue Ticket first",
+											"const tid = pm.collectionVariables.get('ticketId');",
+											"if (!tid) {",
+											"  throw new Error('ticketId collection variable is not set. Run \"Issue Ticket\" first.');",
+											"}",
+											"",
+											"// Track whether this is the first or second check-in call in this run",
+											"let attempt = pm.collectionVariables.get('checkinAttempt');",
+											"attempt = attempt ? Number(attempt) + 1 : 1;",
+											"pm.collectionVariables.set('checkinAttempt', String(attempt));"
+										],
+										"type": "text/javascript",
+										"packages": {},
+										"requests": {}
+									}
+								},
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"let jsonData = null;",
+											"try {",
+											"  jsonData = pm.response.json();",
+											"} catch (e) {",
+											"  // leave as null; some implementations may not return JSON",
+											"}",
+											"",
+											"const attempt = Number(pm.collectionVariables.get('checkinAttempt') || '1');",
+											"",
+											"if (attempt === 1) {",
+											"  pm.test('First check-in: status is 200', function () {",
+											"    pm.response.to.have.status(200);",
+											"  });",
+											"",
+											"  pm.test('First check-in: body indicates success/VALID/USED', function () {",
+											"    pm.expect(jsonData, 'First check-in should return JSON body').to.be.an('object');",
+											"    const statusVal = jsonData.status || jsonData.result || jsonData.state;",
+											"    pm.expect(statusVal, 'status/result/state should indicate USED or VALID').to.be.oneOf(['USED', 'VALID', 'SUCCESS', 'OK']);",
+											"  });",
+											"} else {",
+											"  pm.test('Second check-in: status is 200 or 400 or 409', function () {",
+											"    pm.expect([200, 400, 409]).to.include(pm.response.code);",
+											"  });",
+											"",
+											"  pm.test('Second check-in: body indicates already used / invalid', function () {",
+											"    pm.expect(jsonData, 'Second check-in should return JSON body').to.be.an('object');",
+											"    const statusVal = (jsonData.status || jsonData.result || jsonData.error || '').toString().toUpperCase();",
+											"    const msg = (jsonData.message || jsonData.errorDescription || '').toString().toUpperCase();",
+											"    pm.expect(statusVal + ' ' + msg, 'Must mention already used / invalid').to.satisfy(function (combined) {",
+											"      return combined.includes('ALREADY') || combined.includes('USED') || combined.includes('INVALID');",
+											"    });",
+											"  });",
+											"}"
+										],
+										"type": "text/javascript",
+										"packages": {},
+										"requests": {}
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/api/checkin/phone/{{phoneNumber}}",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"checkin",
+										"phone",
+										"{{phoneNumber}}"
+									]
+								},
+								"description": "Checks in a ticket by its `ticketId`.\n\nPurpose:\n- Mark a ticket as used/checked-in.\n\nPath params:\n- `ticketId` – UUID of the ticket, stored as a collection variable from the Issue Ticket request.\n\nExpected success response (first check-in):\n- 200 OK with JSON body indicating success. Common patterns:\n  - `{ \"status\": \"USED\" }`\n  - `{ \"result\": \"VALID\" }`\n\nExpected duplicate / idempotency behavior (second check-in):\n- 200 OK, 400, or 409 (all treated as acceptable).\n- Body indicates that ticket is already used / invalid for re-entry (e.g. `ALREADY_USED`, `INVALID`, etc.).\n\nError cases:\n- 400 / 404 / 409 depending on implementation if ticket does not exist or is in an invalid state."
+							},
+							"response": []
+						},
+						{
+							"name": "Replace Existing Ticket Record",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "X-Admin-Password",
+										"value": "{{admin-password}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{ \"showName\":\"Updated Show\", \"showId\":\"SHOW-UPDATED-ABC123\", \"auditoriumId\":\"AUD-TEST001\", \"fullName\":\"Updated Name\", \"email\":\"updated@example.com\", \"phoneNumber\":\"+91-9916604905\", \"ticketCount\":3, \"transactionId\":\"TXN-UPDATED-1\", \"ticketAmount\":750, \"status\":\"TRANSACTION_MADE\" }",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/api/tickets/by-user/{{userId}}",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"tickets",
+										"by-user",
+										"{{userId}}"
+									]
+								},
+								"description": "Generated from cURL: curl --location --request PUT 'http://localhost:8080/api/tickets/by-user/E051D84B' --header 'X-Admin-Password: prarambh-admin-delhi' --header 'Content-Type: application/json' --data-raw '{ \"showName\":\"Updated Show\", \"showId\":\"SHOW-UPDATED-ABC123\", \"auditoriumId\":\"AUD-TEST001\", \"fullName\":\"Updated Name\", \"email\":\"updated@example.com\", \"phoneNumber\":\"+91-9916604905\", \"ticketCount\":3, \"transactionId\":\"TXN-UPDATED-1\", \"ticketAmount\":750, \"status\":\"TRANSACTION_MADE\" }'\r\n"
+							},
+							"response": []
+						},
+						{
+							"name": "Update Ticket Record",
+							"request": {
+								"method": "PATCH",
+								"header": [
+									{
+										"key": "X-Admin-Password",
+										"value": "{{admin-password}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"phoneNumber\": \"+91-9999999999\",\r\n    \"ticketAmount\": 800\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/api/tickets/by-user/{{userId}}",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"tickets",
+										"by-user",
+										"{{userId}}"
+									]
+								},
+								"description": "Generated from cURL: curl --location --request PATCH 'http://localhost:8080/api/tickets/by-user/E051D84B' --header 'X-Admin-Password: prarambh-admin-delhi' --header 'Content-Type: application/json' --data-raw '{ \"phoneNumber\":\"+91-9999999999\", \"ticketAmount\":800 }'"
+							},
+							"response": []
+						},
+						{
+							"name": "Delete Ticket Record by User Id",
+							"request": {
+								"method": "DELETE",
+								"header": [
+									{
+										"key": "X-Admin-Password",
+										"value": "{{admin-password}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/tickets/by-user/{{userId}}",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"tickets",
+										"by-user",
+										"{{userId}}"
+									]
+								},
+								"description": "Generated from cURL: curl --location --request DELETE 'http://localhost:8080/api/tickets/by-user/E051D84B' --header 'X-Admin-Password: prarambh-admin-delhi'\r\n"
+							},
+							"response": []
+						},
+						{
+							"name": "Delete Ticket Record by Ticket Id",
+							"request": {
+								"method": "DELETE",
+								"header": [
+									{
+										"key": "X-Admin-Password",
+										"value": "{{admin-password}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/tickets/{{ticketId}}",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"tickets",
+										"{{ticketId}}"
+									]
+								},
+								"description": "Generated from cURL: curl --location --request DELETE 'http://localhost:8080/api/tickets/by-user/E051D84B' --header 'X-Admin-Password: prarambh-admin-delhi'\r\n"
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Admin Tasks",
+					"item": [
+						{
+							"name": "Delete All Data",
+							"request": {
+								"method": "DELETE",
+								"header": [
+									{
+										"key": "X-Admin-Password",
+										"value": "{{admin-password}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/admin/tickets",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"admin",
+										"tickets"
+									]
+								},
+								"description": "Generated from cURL: curl -X DELETE \"http://localhost:8080/api/admin/tickets\" -H \"X-Admin-Password: change-me-local\"\r\n"
+							},
+							"response": []
+						},
+						{
+							"name": "Delete All Data (Body)",
+							"request": {
+								"method": "DELETE",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"password\": \"{{admin-password}}\"\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/api/admin/tickets",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"admin",
+										"tickets"
+									]
+								},
+								"description": "Generated from cURL: curl -X DELETE \"http://localhost:8080/api/admin/tickets\" -H \"Content-Type: application/json\" -d \"{\\\"password\\\":\\\"change-me-local\\\"}\"\r\n"
+							},
+							"response": []
+						},
+						{
+							"name": "Set Show Name",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"// Parse JSON response and set environment variables based on response properties",
+											"",
+											"pm.test(\"Status code is 2xx\", function () {",
+											"    pm.expect(pm.response.code).to.be.within(200, 299);",
+											"});",
+											"",
+											"pm.test(\"Response has Content-Type JSON\", function () {",
+											"    pm.response.to.have.header(\"Content-Type\");",
+											"    const ct = pm.response.headers.get(\"Content-Type\") || \"\";",
+											"    pm.expect(ct.toLowerCase()).to.include(\"application/json\");",
+											"});",
+											"",
+											"let jsonData;",
+											"",
+											"pm.test(\"Response body is valid JSON\", function () {",
+											"    jsonData = pm.response.json();",
+											"    pm.expect(jsonData).to.be.an(\"object\");",
+											"});",
+											"",
+											"pm.test(\"Response has non-empty showId (string)\", function () {",
+											"    pm.expect(jsonData).to.have.property(\"showId\");",
+											"    pm.expect(jsonData.showId).to.be.a(\"string\").and.to.have.length.greaterThan(0);",
+											"});",
+											"",
+											"pm.test(\"Response has non-empty defaultShowName (string)\", function () {",
+											"    pm.expect(jsonData).to.have.property(\"defaultShowName\");",
+											"    pm.expect(jsonData.defaultShowName).to.be.a(\"string\").and.to.have.length.greaterThan(0);",
+											"});",
+											"",
+											"// Set environment variables when present",
+											"if (jsonData && typeof jsonData === \"object\") {",
+											"    if (typeof jsonData.showId === \"string\" && jsonData.showId.length > 0) {",
+											"        pm.environment.set(\"showId\", jsonData.showId);",
+											"    }",
+											"    if (typeof jsonData.defaultShowName === \"string\" && jsonData.defaultShowName.length > 0) {",
+											"        pm.environment.set(\"showName\", jsonData.defaultShowName);",
+											"    }",
+											"}"
+										],
+										"type": "text/javascript",
+										"packages": {},
+										"requests": {}
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "X-Admin-Password",
+										"value": "{{admin-password}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"showName\": \"Chorabali & Gobhir\",\r\n    \"showDate\": \"2025-12-31\",\r\n    \"showTime\": \"18:00\"\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/api/admin/show-name",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"admin",
+										"show-name"
+									]
+								},
+								"description": "Generated from cURL: curl -i -X POST \"http://localhost:8080/api/admin/show-name\" -H \"X-Admin-Password: purged-by-prarambh-admin\" -H \"Content-Type: application/json\" --data \"{\\\"showName\\\":\\\"Act One — Opening Night\\\"}\"\r\n"
+							},
+							"response": []
+						},
+						{
+							"name": "Get Show Name",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/api/tickets/shows",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"tickets",
+										"shows"
+									]
+								},
+								"description": "Generated from cURL: curl --location 'http://localhost:8080/api/tickets/shows'\r\n"
+							},
+							"response": []
+						},
+						{
+							"name": "Resend Email using Transaction Id + Name",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "X-Admin-Password",
+										"value": "{{admin-password}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/resend-email/by-name-and-transaction?fullName={{name}}&transactionId={{transactionId}}",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"resend-email",
+										"by-name-and-transaction"
+									],
+									"query": [
+										{
+											"key": "fullName",
+											"value": "{{name}}"
+										},
+										{
+											"key": "transactionId",
+											"value": "{{transactionId}}"
+										}
+									]
+								},
+								"description": "Generated from cURL: curl --location --request POST 'http://localhost:8080/api/resend-email/by-name-and-transaction?fullName=John%20Doe&transactionId=TXN-12345678' \\\r\n--header 'X-Admin-Password: prarambh-admin-delhi'\r\n"
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Access Data",
+					"item": [
+						{
+							"name": "Get All Tickets",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											""
+										],
+										"type": "text/javascript",
+										"packages": {},
+										"requests": {}
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/api/tickets/all",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"tickets",
+										"all"
+									]
+								},
+								"description": "Fetches a ticket by its `ticketId`.\n\nPurpose:\n- Retrieve ticket details after issuing.\n\nPath params:\n- `ticketId` – UUID of the ticket. Stored as a collection variable by the Issue Ticket request.\n\nExpected success responses:\n- 200 OK with JSON body containing at least `ticketId`.\n\nError cases:\n- 400 / 404 / 409 depending on implementation if ticket does not exist or id is invalid.\n\nNotes:\n- This endpoint is inferred from common Spring conventions and may not be implemented exactly as `/api/tickets/{ticketId}` in your service."
+							},
+							"response": []
+						},
+						{
+							"name": "Get Ticket by TicketId",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test('ticketId collection variable is set before calling', function () {",
+											"  const tid = pm.collectionVariables.get('ticketId');",
+											"  pm.expect(tid, 'ticketId must be set by Issue Ticket').to.exist;",
+											"});",
+											"",
+											"pm.test('Status code is 200', function () {",
+											"  pm.response.to.have.status(200);",
+											"});",
+											"",
+											"let jsonData;",
+											"try {",
+											"  jsonData = pm.response.json();",
+											"} catch (e) {",
+											"  jsonData = null;",
+											"}",
+											"",
+											"pm.test('Response JSON has matching ticketId', function () {",
+											"  pm.expect(jsonData, 'Response must be JSON').to.be.an('object');",
+											"  const expectedId = pm.collectionVariables.get('ticketId');",
+											"  pm.expect(String(jsonData.ticketId)).to.eql(String(expectedId));",
+											"});"
+										],
+										"type": "text/javascript",
+										"packages": {},
+										"requests": {}
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/api/tickets/{{ticketId}}",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"tickets",
+										"{{ticketId}}"
+									]
+								},
+								"description": "Fetches a ticket by its `ticketId`.\n\nPurpose:\n- Retrieve ticket details after issuing.\n\nPath params:\n- `ticketId` – UUID of the ticket. Stored as a collection variable by the Issue Ticket request.\n\nExpected success responses:\n- 200 OK with JSON body containing at least `ticketId`.\n\nError cases:\n- 400 / 404 / 409 depending on implementation if ticket does not exist or id is invalid.\n\nNotes:\n- This endpoint is inferred from common Spring conventions and may not be implemented exactly as `/api/tickets/{ticketId}` in your service."
+							},
+							"response": []
+						},
+						{
+							"name": "Get Details by Phone Number",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/api/transactions/by-phone?phoneNumber=9916604905",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"transactions",
+										"by-phone"
+									],
+									"query": [
+										{
+											"key": "phoneNumber",
+											"value": "9916604905"
+										}
+									]
+								},
+								"description": "Generated from cURL: curl \"http://localhost:8080/api/transactions/by-phone?phoneNumber=%2B15550001111\"\r\n"
+							},
+							"response": []
+						},
+						{
+							"name": "Get Details by Full Name",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/api/transactions/by-name?fullName={{name}}",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"transactions",
+										"by-name"
+									],
+									"query": [
+										{
+											"key": "fullName",
+											"value": "{{name}}"
+										}
+									]
+								},
+								"description": "Generated from cURL: curl \"http://localhost:8080/api/transactions/by-name?fullName=Alex%20Doe\"\r\n"
+							},
+							"response": []
+						},
+						{
+							"name": "Generate Tickets by User Id",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"// Visualization Script",
+											"// Visualization Script",
+											"// Tests tab visualization to parse ZIP responses and chart file sizes",
+											"// Detect ZIP via Content-Type or PK header, parse entries with JSZip, then render Chart.js bar chart",
+											"",
+											"const template = `",
+											"<div>",
+											"  <div id=\"summary\" style=\"font-family: sans-serif; margin-bottom: 12px;\">",
+											"    {{#if meta.isZip}}",
+											"      <div><strong>Total files:</strong> {{meta.totalFiles}}</div>",
+											"      <div><strong>Total size (KB):</strong> {{meta.totalSizeKB}}</div>",
+											"      {{#if meta.truncated}}",
+											"        <div style=\"color:#666; font-size: 12px;\">Showing first 50 files, remaining aggregated as \"Others\".</div>",
+											"      {{/if}}",
+											"    {{else}}",
+											"      <div>Response is not a ZIP file. Content-Type: {{meta.contentType}}</div>",
+											"    {{/if}}",
+											"  </div>",
+											"  {{#if meta.isZip}}",
+											"  <canvas id=\"zipChart\" height=\"90\"></canvas>",
+											"  <script src=\"https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.5.0/Chart.min.js\"></script>",
+											"  <script>",
+											"    pm.getData(function (err, data) {",
+											"      if (err || !data || !data.chart) { return; }",
+											"      var ctx = document.getElementById('zipChart');",
+											"      var labels = data.chart.labels;",
+											"      var sizes = data.chart.sizes;",
+											"      var bg = sizes.map(function(_, i){ return 'rgba(' + (50 + (i*13)%205) + ', ' + (99 + (i*29)%156) + ', ' + (200 + (i*17)%55) + ', 0.6)'; });",
+											"      var border = bg.map(function(c){ return c.replace('0.6', '1'); });",
+											"      new Chart(ctx, {",
+											"        type: 'bar',",
+											"        data: {",
+											"          labels: labels,",
+											"          datasets: [{",
+											"            label: 'File size (KB)',",
+											"            data: sizes,",
+											"            backgroundColor: bg,",
+											"            borderColor: border,",
+											"            borderWidth: 1",
+											"          }]",
+											"        },",
+											"        options: {",
+											"          responsive: true,",
+											"          maintainAspectRatio: false,",
+											"          legend: { display: true },",
+											"          title: { display: true, text: 'ZIP Contents' },",
+											"          scales: {",
+											"            xAxes: [{",
+											"              ticks: { autoSkip: false, maxRotation: 45, minRotation: 0 },",
+											"              scaleLabel: { display: true, labelString: 'Filename' }",
+											"            }],",
+											"            yAxes: [{",
+											"              ticks: { beginAtZero: true },",
+											"              scaleLabel: { display: true, labelString: 'Size (KB)' }",
+											"            }]",
+											"          },",
+											"          tooltips: { callbacks: { label: function(tooltipItem, d){ return d.labels[tooltipItem.index] + ': ' + sizes[tooltipItem.index] + ' KB'; } } }",
+											"        }",
+											"      });",
+											"    });",
+											"  </script>",
+											"  {{/if}}",
+											"</div>`;",
+											"",
+											"function isZipResponse() {",
+											"  var ct = pm.response.headers.get('Content-Type') || pm.response.headers.get('content-type') || '';",
+											"  var body = pm.response.text();",
+											"  var startsWithPK = false;",
+											"  try {",
+											"    startsWithPK = body && body.length >= 2 && body.charCodeAt(0) === 80 && body.charCodeAt(1) === 75; // 'P''K'",
+											"  } catch (e) { startsWithPK = false; }",
+											"  return { isZip: /application\\/(zip|x-zip-compressed)/i.test(ct) || startsWithPK, contentType: ct };",
+											"}",
+											"",
+											"function createPayload() {",
+											"  var meta = { isZip: false, contentType: '', totalFiles: 0, totalSizeKB: 0, truncated: false };",
+											"  var chart = { labels: [], sizes: [] };",
+											"  var detection = isZipResponse();",
+											"  meta.contentType = detection.contentType;",
+											"  if (!detection.isZip) { return { meta: meta, chart: chart }; }",
+											"  meta.isZip = true;",
+											"",
+											"  // Load JSZip from CDN, then parse the binary",
+											"  return new Promise(function(resolve) {",
+											"    pm.sendRequest({",
+											"      url: 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js',",
+											"      method: 'GET'",
+											"    }, function(err, res){",
+											"      if (err || !res || res.code !== 200) {",
+											"        meta.isZip = false;",
+											"        meta.contentType = 'Failed to load JSZip';",
+											"        return resolve({ meta: meta, chart: chart });",
+											"      }",
+											"      try {",
+											"        /* eslint-disable */",
+											"        eval(res.text()); // defines JSZip in sandbox",
+											"        /* eslint-enable */",
+											"      } catch (e) {",
+											"        meta.isZip = false;",
+											"        meta.contentType = 'Error evaluating JSZip';",
+											"        return resolve({ meta: meta, chart: chart });",
+											"      }",
+											"",
+											"      try {",
+											"        var bin = pm.response.text();",
+											"        // Convert string to Uint8Array (binary)",
+											"        var bytes = new Uint8Array(bin.length);",
+											"        for (var i = 0; i < bin.length; i++) {",
+											"          bytes[i] = bin.charCodeAt(i) & 0xFF;",
+											"        }",
+											"        var zip = new JSZip();",
+											"        zip.loadAsync(bytes).then(function(z){",
+											"          var entries = [];",
+											"          z.forEach(function (relativePath, file) {",
+											"            if (!file.dir) {",
+											"              entries.push({ name: relativePath, size: file._data ? (file._data.uncompressedSize || 0) : file._dataUncompressedSize || 0 });",
+											"            }",
+											"          });",
+											"          // JSZip doesn't expose sizes until async content is read in some cases; fallback by collecting via file._data if available",
+											"          // If size unknown, set 0 and it will still render",
+											"          // Compute and limit to 50 entries",
+											"          entries = entries.map(function(e){ return { name: e.name, sizeKB: Math.round((e.size || 0) / 1024) }; });",
+											"          var totalFiles = entries.length;",
+											"          var totalSizeKB = entries.reduce(function(a, b){ return a + (b.sizeKB || 0); }, 0);",
+											"          var limited = entries;",
+											"          if (entries.length > 50) {",
+											"            meta.truncated = true;",
+											"            limited = entries.slice(0,50);",
+											"            var othersKB = entries.slice(50).reduce(function(a,b){ return a + (b.sizeKB || 0); }, 0);",
+											"            limited.push({ name: 'Others', sizeKB: othersKB });",
+											"          }",
+											"          chart.labels = limited.map(function(e){ return e.name; });",
+											"          chart.sizes = limited.map(function(e){ return e.sizeKB; });",
+											"          meta.totalFiles = totalFiles;",
+											"          meta.totalSizeKB = totalSizeKB;",
+											"          resolve({ meta: meta, chart: chart });",
+											"        }).catch(function(){",
+											"          meta.isZip = false;",
+											"          meta.contentType = 'Error parsing ZIP';",
+											"          resolve({ meta: meta, chart: chart });",
+											"        });",
+											"      } catch (e) {",
+											"        meta.isZip = false;",
+											"        meta.contentType = 'Error preparing ZIP bytes';",
+											"        resolve({ meta: meta, chart: chart });",
+											"      }",
+											"    });",
+											"  });",
+											"}",
+											"",
+											"pm.visualizer.set(template, createPayload());"
+										],
+										"type": "text/javascript",
+										"packages": {},
+										"requests": {}
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/api/ticket-cards/by-user/{{userId}}",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"ticket-cards",
+										"by-user",
+										"{{userId}}"
+									]
+								},
+								"description": "Generated from cURL: curl --location \"http://localhost:8080/api/ticket-cards/by-customer/1010\" --output \"ticket-cards-1010.zip\"\r\n"
+							},
+							"response": []
+						},
+						{
+							"name": "Generate Tickets by Transaction Id",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"// Visualization Script",
+											"// Visualization Script",
+											"// Tests tab visualization to parse ZIP responses and chart file sizes",
+											"// Detect ZIP via Content-Type or PK header, parse entries with JSZip, then render Chart.js bar chart",
+											"",
+											"const template = `",
+											"<div>",
+											"  <div id=\"summary\" style=\"font-family: sans-serif; margin-bottom: 12px;\">",
+											"    {{#if meta.isZip}}",
+											"      <div><strong>Total files:</strong> {{meta.totalFiles}}</div>",
+											"      <div><strong>Total size (KB):</strong> {{meta.totalSizeKB}}</div>",
+											"      {{#if meta.truncated}}",
+											"        <div style=\"color:#666; font-size: 12px;\">Showing first 50 files, remaining aggregated as \"Others\".</div>",
+											"      {{/if}}",
+											"    {{else}}",
+											"      <div>Response is not a ZIP file. Content-Type: {{meta.contentType}}</div>",
+											"    {{/if}}",
+											"  </div>",
+											"  {{#if meta.isZip}}",
+											"  <canvas id=\"zipChart\" height=\"90\"></canvas>",
+											"  <script src=\"https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.5.0/Chart.min.js\"></script>",
+											"  <script>",
+											"    pm.getData(function (err, data) {",
+											"      if (err || !data || !data.chart) { return; }",
+											"      var ctx = document.getElementById('zipChart');",
+											"      var labels = data.chart.labels;",
+											"      var sizes = data.chart.sizes;",
+											"      var bg = sizes.map(function(_, i){ return 'rgba(' + (50 + (i*13)%205) + ', ' + (99 + (i*29)%156) + ', ' + (200 + (i*17)%55) + ', 0.6)'; });",
+											"      var border = bg.map(function(c){ return c.replace('0.6', '1'); });",
+											"      new Chart(ctx, {",
+											"        type: 'bar',",
+											"        data: {",
+											"          labels: labels,",
+											"          datasets: [{",
+											"            label: 'File size (KB)',",
+											"            data: sizes,",
+											"            backgroundColor: bg,",
+											"            borderColor: border,",
+											"            borderWidth: 1",
+											"          }]",
+											"        },",
+											"        options: {",
+											"          responsive: true,",
+											"          maintainAspectRatio: false,",
+											"          legend: { display: true },",
+											"          title: { display: true, text: 'ZIP Contents' },",
+											"          scales: {",
+											"            xAxes: [{",
+											"              ticks: { autoSkip: false, maxRotation: 45, minRotation: 0 },",
+											"              scaleLabel: { display: true, labelString: 'Filename' }",
+											"            }],",
+											"            yAxes: [{",
+											"              ticks: { beginAtZero: true },",
+											"              scaleLabel: { display: true, labelString: 'Size (KB)' }",
+											"            }]",
+											"          },",
+											"          tooltips: { callbacks: { label: function(tooltipItem, d){ return d.labels[tooltipItem.index] + ': ' + sizes[tooltipItem.index] + ' KB'; } } }",
+											"        }",
+											"      });",
+											"    });",
+											"  </script>",
+											"  {{/if}}",
+											"</div>`;",
+											"",
+											"function isZipResponse() {",
+											"  var ct = pm.response.headers.get('Content-Type') || pm.response.headers.get('content-type') || '';",
+											"  var body = pm.response.text();",
+											"  var startsWithPK = false;",
+											"  try {",
+											"    startsWithPK = body && body.length >= 2 && body.charCodeAt(0) === 80 && body.charCodeAt(1) === 75; // 'P''K'",
+											"  } catch (e) { startsWithPK = false; }",
+											"  return { isZip: /application\\/(zip|x-zip-compressed)/i.test(ct) || startsWithPK, contentType: ct };",
+											"}",
+											"",
+											"function createPayload() {",
+											"  var meta = { isZip: false, contentType: '', totalFiles: 0, totalSizeKB: 0, truncated: false };",
+											"  var chart = { labels: [], sizes: [] };",
+											"  var detection = isZipResponse();",
+											"  meta.contentType = detection.contentType;",
+											"  if (!detection.isZip) { return { meta: meta, chart: chart }; }",
+											"  meta.isZip = true;",
+											"",
+											"  // Load JSZip from CDN, then parse the binary",
+											"  return new Promise(function(resolve) {",
+											"    pm.sendRequest({",
+											"      url: 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js',",
+											"      method: 'GET'",
+											"    }, function(err, res){",
+											"      if (err || !res || res.code !== 200) {",
+											"        meta.isZip = false;",
+											"        meta.contentType = 'Failed to load JSZip';",
+											"        return resolve({ meta: meta, chart: chart });",
+											"      }",
+											"      try {",
+											"        /* eslint-disable */",
+											"        eval(res.text()); // defines JSZip in sandbox",
+											"        /* eslint-enable */",
+											"      } catch (e) {",
+											"        meta.isZip = false;",
+											"        meta.contentType = 'Error evaluating JSZip';",
+											"        return resolve({ meta: meta, chart: chart });",
+											"      }",
+											"",
+											"      try {",
+											"        var bin = pm.response.text();",
+											"        // Convert string to Uint8Array (binary)",
+											"        var bytes = new Uint8Array(bin.length);",
+											"        for (var i = 0; i < bin.length; i++) {",
+											"          bytes[i] = bin.charCodeAt(i) & 0xFF;",
+											"        }",
+											"        var zip = new JSZip();",
+											"        zip.loadAsync(bytes).then(function(z){",
+											"          var entries = [];",
+											"          z.forEach(function (relativePath, file) {",
+											"            if (!file.dir) {",
+											"              entries.push({ name: relativePath, size: file._data ? (file._data.uncompressedSize || 0) : file._dataUncompressedSize || 0 });",
+											"            }",
+											"          });",
+											"          // JSZip doesn't expose sizes until async content is read in some cases; fallback by collecting via file._data if available",
+											"          // If size unknown, set 0 and it will still render",
+											"          // Compute and limit to 50 entries",
+											"          entries = entries.map(function(e){ return { name: e.name, sizeKB: Math.round((e.size || 0) / 1024) }; });",
+											"          var totalFiles = entries.length;",
+											"          var totalSizeKB = entries.reduce(function(a, b){ return a + (b.sizeKB || 0); }, 0);",
+											"          var limited = entries;",
+											"          if (entries.length > 50) {",
+											"            meta.truncated = true;",
+											"            limited = entries.slice(0,50);",
+											"            var othersKB = entries.slice(50).reduce(function(a,b){ return a + (b.sizeKB || 0); }, 0);",
+											"            limited.push({ name: 'Others', sizeKB: othersKB });",
+											"          }",
+											"          chart.labels = limited.map(function(e){ return e.name; });",
+											"          chart.sizes = limited.map(function(e){ return e.sizeKB; });",
+											"          meta.totalFiles = totalFiles;",
+											"          meta.totalSizeKB = totalSizeKB;",
+											"          resolve({ meta: meta, chart: chart });",
+											"        }).catch(function(){",
+											"          meta.isZip = false;",
+											"          meta.contentType = 'Error parsing ZIP';",
+											"          resolve({ meta: meta, chart: chart });",
+											"        });",
+											"      } catch (e) {",
+											"        meta.isZip = false;",
+											"        meta.contentType = 'Error preparing ZIP bytes';",
+											"        resolve({ meta: meta, chart: chart });",
+											"      }",
+											"    });",
+											"  });",
+											"}",
+											"",
+											"pm.visualizer.set(template, createPayload());"
+										],
+										"type": "text/javascript",
+										"packages": {},
+										"requests": {}
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/api/ticket-cards/by-transaction/{{transactionId}}",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"ticket-cards",
+										"by-transaction",
+										"{{transactionId}}"
+									]
+								},
+								"description": "Generated from cURL: curl --location \"http://localhost:8080/api/ticket-cards/by-customer/1010\" --output \"ticket-cards-1010.zip\"\r\n"
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Transactions",
+					"item": [
+						{
+							"name": "Initiate Ticket with Transaction",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"// Parse JSON safely and extract customerId, then store in environment",
+											"(function () {",
+											"  const respText = pm.response.text();",
+											"  let json;",
+											"",
+											"  pm.test(\"Response is valid JSON (or skip)\", function () {",
+											"    try {",
+											"      json = pm.response.json();",
+											"      pm.expect(typeof json).to.be.oneOf([\"object\", \"array\"]);",
+											"    } catch (e) {",
+											"      // Mark this test as skipped by asserting true with a message, and exit other tests",
+											"      pm.expect.fail(\"Response is not valid JSON. Skipping customerId checks.\");",
+											"    }",
+											"  });",
+											"",
+											"  // If JSON parsing failed, stop further tests",
+											"  if (!json) { return; }",
+											"",
+											"  // Using the example shape from context, assert customerId exists and is a number",
+											"  pm.test(\"customerId field exists\", function () {",
+											"    pm.expect(json).to.have.property(\"customerId\");",
+											"  });",
+											"",
+											"  pm.test(\"customerId is a number\", function () {",
+											"    pm.expect(json.customerId, \"customerId should be a finite number\").to.satisfy((v) => typeof v === \"number\" && Number.isFinite(v));",
+											"  });",
+											"",
+											"  // Set environment variable as string to preserve type across runs",
+											"  pm.test(\"Set environment variable: customerId\", function () {",
+											"    const cid = json.customerId;",
+											"    pm.environment.set(\"customerId\", String(cid));",
+											"    pm.expect(pm.environment.get(\"customerId\")).to.eql(String(cid));",
+											"  });",
+											"",
+											"  // Friendly summary test",
+											"  pm.test(\"customerId captured successfully\", function () {",
+											"    pm.expect(pm.environment.get(\"customerId\"), \"customerId env var should be set\").to.be.a(\"string\").and.not.empty;",
+											"  });",
+											"})();"
+										],
+										"type": "text/javascript",
+										"packages": {},
+										"requests": {}
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"showId\": \"{{showId}}\",\n  \"auditoriumId\": \"{{auditoriumId}}\",\n  \"showName\": \"{{showName}}\",\n  \"fullName\": \"Rish Kar\",\n  \"email\": \"rishabh.kar.ai@gmail.com\",\n  \"ticketCount\": 10,\n  \"ticketAmount\": 750,\n  \"phoneNumber\": \"99166024905\",\n  \"transactionId\": \"DDDD\"\n\n}"
+								},
+								"url": {
+									"raw": "{{baseUrl}}/api/tickets/issue",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"tickets",
+										"issue"
+									]
+								},
+								"description": "Issues a new ticket for a show.\n\nPurpose:\n- Create a new ticket with show and attendee details.\n\nRequest body (JSON):\n```json\n{\n  \"showId\": null,\n  \"showName\": \"Act One — Opening Night\",\n  \"fullName\": \"Aisha Khan\",\n  \"email\": \"{{uniqueEmail}}\",\n  \"phoneNumber\": \"+44 7700 900101\"\n}\n```\n\nExpected success responses:\n- 200 OK or 201 Created.\n- JSON body containing at minimum: `ticketId` (UUID).\n- Optionally may contain `barcodeId` (UUID) and `status` (e.g. `ISSUED`).\n\nError cases:\n- 400 Bad Request for validation errors (missing/invalid fields)."
+							},
+							"response": []
+						},
+						{
+							"name": "Create Successful Transaction Record",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"showName\": \"Evening Show\",\r\n    \"showId\": \"SHOW-1\",\r\n    \"fullName\": \"Alex Doe\",\r\n    \"email\": \"alex@example.com\",\r\n    \"phoneNumber\": \"+15550001111\",\r\n    \"ticketCount\": 2,\r\n    \"ticketAmount\": 1500,\r\n    \"transactionId\": \"TXN-9001\"\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/api/transactions/record",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"transactions",
+										"record"
+									]
+								},
+								"description": "Generated from cURL: curl -X POST http://localhost:8080/api/transactions/record -H \"Content-Type: application/json\" -d '{\"showName\":\"Evening Show\",\"showId\":\"SHOW-1\",\"fullName\":\"Alex Doe\",\"email\":\"alex@example.com\",\"phoneNumber\":\"+15550001111\",\"ticketCount\":2,\"ticketAmount\":1500,\"transactionId\":\"TXN-9001\"}'\r\n"
+							},
+							"response": []
+						},
+						{
+							"name": "Create Pending Transaction Record",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"showId\": null,\r\n    \"showName\": \"Test Show\",\r\n    \"fullName\": \"Rishabh Kar\",\r\n    \"email\": \"rishabh.kar.ai@gmail.com\",\r\n    \"phoneNumber\": \"+919916604905\",\r\n    \"ticketCount\": 2,\r\n    \"transactionId\": \"TXN-CASH-1\",\r\n    \"ticketAmount\": \"500.00\"\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/api/transactions/record-pending",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"transactions",
+										"record-pending"
+									]
+								},
+								"description": "Generated from cURL: curl --location 'http://localhost:8080/api/transactions/record-pending' --header 'Content-Type: application/json' --data '{\"showId\":null,\"showName\":\"Test Show\",\"fullName\":\"Rishabh Kar\",\"email\":\"rishabh.kar.ai@gmail.com\",\"phoneNumber\":\"+919916604905\",\"ticketCount\":2,\"transactionId\":\"TXN-CASH-1\",\"ticketAmount\":\"500.00\"}'\r\n"
+							},
+							"response": []
+						},
+						{
+							"name": "Get Transaction by Phone (partial match)",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/api/transactions/by-phone?phoneNumber=9916604905",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"transactions",
+										"by-phone"
+									],
+									"query": [
+										{
+											"key": "phoneNumber",
+											"value": "9916604905"
+										}
+									]
+								},
+								"description": "Generated from cURL: curl --location 'http://localhost:8080/api/transactions/by-phone?phoneNumber=9916604905'\r\n"
+							},
+							"response": []
+						},
+						{
+							"name": "Get Transaction by Name (partial match)",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/api/transactions/by-name?fullName=Rishabh",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"transactions",
+										"by-name"
+									],
+									"query": [
+										{
+											"key": "fullName",
+											"value": "Rishabh"
+										}
+									]
+								},
+								"description": "Generated from cURL: curl --location 'http://localhost:8080/api/transactions/by-name?fullName=Rishabh'\r\n"
+							},
+							"response": []
+						},
+						{
+							"name": "Issue Ticket with User Id",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											""
+										],
+										"type": "text/javascript",
+										"packages": {},
+										"requests": {}
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": ""
+								},
+								"url": {
+									"raw": "{{baseUrl}}/api/transactions/{{userId}}/issue",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"transactions",
+										"{{userId}}",
+										"issue"
+									]
+								},
+								"description": "Issues a new ticket for a show.\n\nPurpose:\n- Create a new ticket with show and attendee details.\n\nRequest body (JSON):\n```json\n{\n  \"showId\": null,\n  \"showName\": \"Act One — Opening Night\",\n  \"fullName\": \"Aisha Khan\",\n  \"email\": \"{{uniqueEmail}}\",\n  \"phoneNumber\": \"+44 7700 900101\"\n}\n```\n\nExpected success responses:\n- 200 OK or 201 Created.\n- JSON body containing at minimum: `ticketId` (UUID).\n- Optionally may contain `barcodeId` (UUID) and `status` (e.g. `ISSUED`).\n\nError cases:\n- 400 Bad Request for validation errors (missing/invalid fields)."
+							},
+							"response": []
+						},
+						{
+							"name": "Check-in Tickets by User Id",
+							"event": [
+								{
+									"listen": "prerequest",
+									"script": {
+										"exec": [
+											"// Ensure ticketId is present; if not, fail early so user runs Issue Ticket first",
+											"const tid = pm.collectionVariables.get('ticketId');",
+											"if (!tid) {",
+											"  throw new Error('ticketId collection variable is not set. Run \"Issue Ticket\" first.');",
+											"}",
+											"",
+											"// Track whether this is the first or second check-in call in this run",
+											"let attempt = pm.collectionVariables.get('checkinAttempt');",
+											"attempt = attempt ? Number(attempt) + 1 : 1;",
+											"pm.collectionVariables.set('checkinAttempt', String(attempt));"
+										],
+										"type": "text/javascript",
+										"packages": {},
+										"requests": {}
+									}
+								},
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"let jsonData = null;",
+											"try {",
+											"  jsonData = pm.response.json();",
+											"} catch (e) {",
+											"  // leave as null; some implementations may not return JSON",
+											"}",
+											"",
+											"const attempt = Number(pm.collectionVariables.get('checkinAttempt') || '1');",
+											"",
+											"if (attempt === 1) {",
+											"  pm.test('First check-in: status is 200', function () {",
+											"    pm.response.to.have.status(200);",
+											"  });",
+											"",
+											"  pm.test('First check-in: body indicates success/VALID/USED', function () {",
+											"    pm.expect(jsonData, 'First check-in should return JSON body').to.be.an('object');",
+											"    const statusVal = jsonData.status || jsonData.result || jsonData.state;",
+											"    pm.expect(statusVal, 'status/result/state should indicate USED or VALID').to.be.oneOf(['USED', 'VALID', 'SUCCESS', 'OK']);",
+											"  });",
+											"} else {",
+											"  pm.test('Second check-in: status is 200 or 400 or 409', function () {",
+											"    pm.expect([200, 400, 409]).to.include(pm.response.code);",
+											"  });",
+											"",
+											"  pm.test('Second check-in: body indicates already used / invalid', function () {",
+											"    pm.expect(jsonData, 'Second check-in should return JSON body').to.be.an('object');",
+											"    const statusVal = (jsonData.status || jsonData.result || jsonData.error || '').toString().toUpperCase();",
+											"    const msg = (jsonData.message || jsonData.errorDescription || '').toString().toUpperCase();",
+											"    pm.expect(statusVal + ' ' + msg, 'Must mention already used / invalid').to.satisfy(function (combined) {",
+											"      return combined.includes('ALREADY') || combined.includes('USED') || combined.includes('INVALID');",
+											"    });",
+											"  });",
+											"}"
+										],
+										"type": "text/javascript",
+										"packages": {},
+										"requests": {}
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/api/transactions/{{userId}}/checkin",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"transactions",
+										"{{userId}}",
+										"checkin"
+									]
+								},
+								"description": "Checks in a ticket by its `ticketId`.\n\nPurpose:\n- Mark a ticket as used/checked-in.\n\nPath params:\n- `ticketId` – UUID of the ticket, stored as a collection variable from the Issue Ticket request.\n\nExpected success response (first check-in):\n- 200 OK with JSON body indicating success. Common patterns:\n  - `{ \"status\": \"USED\" }`\n  - `{ \"result\": \"VALID\" }`\n\nExpected duplicate / idempotency behavior (second check-in):\n- 200 OK, 400, or 409 (all treated as acceptable).\n- Body indicates that ticket is already used / invalid for re-entry (e.g. `ALREADY_USED`, `INVALID`, etc.).\n\nError cases:\n- 400 / 404 / 409 depending on implementation if ticket does not exist or is in an invalid state."
+							},
+							"response": []
+						},
+						{
+							"name": "Get Transactions by User Id",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "X-Admin-Password",
+										"value": "{{admin-password}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/transactions/{{userId}}/transactions",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"transactions",
+										"{{userId}}",
+										"transactions"
+									]
+								},
+								"description": "Generated from cURL: curl --location --request GET 'http://localhost:8080/api/transactions/{userId}/transactions' -H 'X-Admin-Password: prarambh-admin-delhi'\r\n"
+							},
+							"response": []
+						},
+						{
+							"name": "Issue Ticket by Transaction Id",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "X-Admin-Password",
+										"value": "{{admin-password}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/transactions/by-transaction/{{transactionId}}/validate",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"transactions",
+										"by-transaction",
+										"{{transactionId}}",
+										"validate"
+									]
+								},
+								"description": "Generated from cURL: curl --location --request POST 'http://localhost:8080/api/transactions/by-transaction/{transactionId}/validate' -H 'X-Admin-Password: prarambh-admin-delhi'\r\n"
+							},
+							"response": []
+						},
+						{
+							"name": "Check-In Tickets by Transaction Id",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "X-Admin-Password",
+										"value": "{{admin-password}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/transactions/by-transaction/{{transactionId}}/checkin",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"transactions",
+										"by-transaction",
+										"{{transactionId}}",
+										"checkin"
+									]
+								},
+								"description": "Generated from cURL: curl --location --request POST 'http://localhost:8080/api/transactions/by-transaction/{transactionId}/checkin' -H 'X-Admin-Password: prarambh-admin-delhi'\r\n"
+							},
+							"response": []
+						},
+						{
+							"name": "Get Transaction by Transaction Id",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "X-Admin-Password",
+										"value": "{{admin-password}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/transactions/by-transaction/{{transactionId}}",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"transactions",
+										"by-transaction",
+										"{{transactionId}}"
+									]
+								},
+								"description": "Generated from cURL: curl --location --request GET 'http://localhost:8080/api/transactions/by-transaction/{transactionId}' -H 'X-Admin-Password: prarambh-admin-delhi'\r\n"
+							},
+							"response": []
+						},
+						{
+							"name": "Get Successful Transactions",
+							"protocolProfileBehavior": {
+								"disableBodyPruning": true
+							},
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "X-Admin-Password",
+										"value": "{{admin-password}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/api/transactions/successful",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"transactions",
+										"successful"
+									]
+								},
+								"description": "Generated from cURL: curl -i -X POST \"http://localhost:8080/api/admin/show-name\" -H \"X-Admin-Password: purged-by-prarambh-admin\" -H \"Content-Type: application/json\" --data \"{\\\"showName\\\":\\\"Act One — Opening Night\\\"}\"\r\n"
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Feedback",
+					"item": [
+						{
+							"name": "Get All Feedbacks",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "X-Admin-Password",
+										"value": "{{admin-password}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/feedback",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"feedback"
+									]
+								},
+								"description": "Generated from cURL: curl --location 'http://localhost:8080/api/feedback' --header 'X-Admin-Password: prarambh-admin-delhi'"
+							},
+							"response": []
+						},
+						{
+							"name": "Submit Feedback",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"fullName\": \"Arjun Verma\",\r\n    \"phoneNumber\": \"+919916604905\",\r\n    \"email\": \"arjun.verma@example.com\",\r\n    \"message\": \"Really enjoyed the show!\"\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/api/feedback",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"feedback"
+									]
+								},
+								"description": "Generated from cURL: curl --location 'http://localhost:8080/api/feedback' --header 'Content-Type: application/json' --data '{\"fullName\":\"Arjun Verma\",\"phoneNumber\":\"+919916604905\",\"email\":\"arjun.verma@example.com\",\"message\":\"Really enjoyed the show!\"}'\r\n"
+							},
+							"response": []
+						},
+						{
+							"name": "Delete Feedback by Id",
+							"request": {
+								"method": "DELETE",
+								"header": [
+									{
+										"key": "X-Admin-Password",
+										"value": "{{admin-password}}"
+									}
+								],
+								"url": {
+									"raw": "{{baseUrl}}/api/feedback/{id}",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"feedback",
+										"{id}"
+									]
+								},
+								"description": "Generated from cURL: curl --location --request DELETE 'http://localhost:8080/api/feedback/{id}' --header 'X-Admin-Password: prarambh-admin-delhi'\r\n"
+							},
+							"response": []
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Auditorium",
+			"item": [
+				{
+					"name": "Create Auditorium Details",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Ensure status is 2xx",
+									"pm.test('Status code is 2xx', function () {",
+									"    pm.expect(pm.response.code).to.be.within(200, 299);",
+									"});",
+									"",
+									"// Ensure response has Content-Type JSON (if header present)",
+									"pm.test('Response has JSON content-type (if provided)', function () {",
+									"    const ct = pm.response.headers.get('Content-Type');",
+									"    if (ct) {",
+									"        pm.expect(ct.toLowerCase()).to.include('application/json');",
+									"    } else {",
+									"        pm.expect(true).to.be.true; // header not mandatory",
+									"    }",
+									"});",
+									"",
+									"// Parse JSON safely and validate shape",
+									"let data = null;",
+									"pm.test('Response body is valid JSON', function () {",
+									"    let isJson = pm.response.headers.get('Content-Type') && pm.response.headers.get('Content-Type').toLowerCase().includes('application/json');",
+									"    try {",
+									"        data = pm.response.json();",
+									"        // Even if header missing, parsing should succeed for valid JSON",
+									"        pm.expect(typeof data).to.be.oneOf(['object', 'array']);",
+									"    } catch (e) {",
+									"        // If parsing fails, mark test as failed explicitly",
+									"        pm.expect.fail('Response body is not valid JSON: ' + e.message);",
+									"    }",
+									"});",
+									"",
+									"// Ensure required fields exist and are strings",
+									"pm.test('Response has showId and auditoriumId as strings', function () {",
+									"    pm.expect(data).to.be.an('object');",
+									"    pm.expect(data).to.have.property('showId');",
+									"    pm.expect(data).to.have.property('auditoriumId');",
+									"    pm.expect(data.showId).to.be.a('string').and.to.have.length.greaterThan(0);",
+									"    pm.expect(data.auditoriumId).to.be.a('string').and.to.have.length.greaterThan(0);",
+									"});",
+									"",
+									"// Store values into environment variables if valid",
+									"pm.test('Store showId and auditoriumId to environment', function () {",
+									"    if (data && typeof data === 'object' && typeof data.showId === 'string' && typeof data.auditoriumId === 'string') {",
+									"        pm.environment.set('showId', data.showId);",
+									"        pm.environment.set('auditoriumId', data.auditoriumId);",
+									"        pm.expect(pm.environment.get('showId')).to.eql(data.showId);",
+									"        pm.expect(pm.environment.get('auditoriumId')).to.eql(data.auditoriumId);",
+									"    } else {",
+									"        pm.expect.fail('showId or auditoriumId missing or not strings; not setting environment variables.');",
+									"    }",
+									"});",
+									"",
+									"// Presence checks for other typical fields if present (non-strict)",
+									"pm.test('Optional fields have expected types when present', function () {",
+									"    if (!data || typeof data !== 'object') {",
+									"        return;",
+									"    }",
+									"    const optionalStringFields = ['auditoriumName', 'showDate', 'showTime'];",
+									"    optionalStringFields.forEach(function (k) {",
+									"        if (Object.prototype.hasOwnProperty.call(data, k) && data[k] !== null && data[k] !== undefined) {",
+									"            pm.expect(data[k]).to.be.a('string');",
+									"        }",
+									"    });",
+									"",
+									"    const optionalNumberFields = ['availableSeats', 'bookedSeats', 'checkedInSeats', 'confirmedSeats', 'reservedSeats', 'totalSeats'];",
+									"    optionalNumberFields.forEach(function (k) {",
+									"        if (Object.prototype.hasOwnProperty.call(data, k) && data[k] !== null && data[k] !== undefined) {",
+									"            pm.expect(data[k]).to.satisfy(n => typeof n === 'number' && isFinite(n), k + ' should be a finite number');",
+									"        }",
+									"    });",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {},
+								"requests": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-Admin-Password",
+								"value": "prarambh-admin-delhi"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"auditoriumName\": \"LTG\",\r\n    \"showDate\": \"2025-12-29\",\r\n    \"showName\": \"Chorabali\",\r\n    \"showTime\": \"19:00:00\",\r\n    \"ticketAmount\": 250,\r\n    \"totalSeats\": 180,\r\n    \"reservedSeats\": 10\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auditoriums",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"auditoriums"
+							]
+						},
+						"description": "Generated from cURL: curl --location 'http://localhost:8080/api/auditoriums' --header 'X-Admin-Password: prarambh-admin-delhi' --header 'Content-Type: application/json' --data '{\"showId\":\"SHOW-2025-001\",\"auditoriumName\":\"Main Auditorium\",\"showDate\":\"2025-12-29\",\"showTime\":\"19:00:00\",\"totalSeats\":200,\"reservedSeats\":10}'"
+					},
+					"response": []
+				},
+				{
+					"name": "Recalculate Seats Explicitly",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-Admin-Password",
+								"value": "{{admin-password}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/auditoriums/{{auditoriumId}}}/recalculate",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"auditoriums",
+								"{{auditoriumId}}}",
+								"recalculate"
+							]
+						},
+						"description": "Generated from cURL: curl --location --request POST 'http://localhost:8080/api/auditoriums/{auditoriumId}/recalculate' --header 'X-Admin-Password: prarambh-admin-delhi'"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Auditorium Details by Auditorium Id",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Admin-Password",
+								"value": "prarambh-admin-delhi"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/auditoriums/{{auditoriumId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"auditoriums",
+								"{{auditoriumId}}"
+							]
+						},
+						"description": "Generated from cURL: curl --location 'http://localhost:8080/api/auditoriums/{auditoriumId}' --header 'X-Admin-Password: prarambh-admin-delhi'\r\n"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Auditorium Details",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Parse JSON safely and store fields from first item into environment variables with safeguards",
+									"",
+									"pm.test(\"Status code is 200\", function () {",
+									"  pm.expect(pm.response.code).to.eql(200);",
+									"});",
+									"",
+									"pm.test(\"Content-Type is JSON\", function () {",
+									"  pm.response.to.have.header(\"Content-Type\");",
+									"  const ct = pm.response.headers.get(\"Content-Type\") || \"\";",
+									"  pm.expect(ct.toLowerCase()).to.include(\"application/json\");",
+									"});",
+									"",
+									"let data;",
+									"let isArray = false;",
+									"",
+									"pm.test(\"Response body is valid JSON\", function () {",
+									"  try {",
+									"    data = pm.response.json();",
+									"  } catch (e) {",
+									"    data = undefined;",
+									"  }",
+									"  pm.expect(data, \"Response should be JSON\").to.not.be.undefined;",
+									"});",
+									"",
+									"pm.test(\"Response body is an array\", function () {",
+									"  isArray = Array.isArray(data);",
+									"  pm.expect(isArray, \"Response should be an array\").to.be.true;",
+									"});",
+									"",
+									"pm.test(\"Array is not empty\", function () {",
+									"  if (!isArray) {",
+									"    return pm.expect.fail(\"Body was not an array\");",
+									"  }",
+									"  pm.expect(data.length, \"Array should not be empty\").to.be.greaterThan(0);",
+									"});",
+									"",
+									"pm.test(\"Every element has required keys\", function () {",
+									"  if (!isArray) {",
+									"    return pm.expect.fail(\"Body was not an array\");",
+									"  }",
+									"  const required = [\"showId\", \"showName\", \"auditoriumId\", \"auditoriumName\"];",
+									"  data.forEach((item, idx) => {",
+									"    required.forEach((k) => {",
+									"      pm.expect(Object.prototype.hasOwnProperty.call(item, k), `Item ${idx} missing key: ${k}`).to.be.true;",
+									"    });",
+									"  });",
+									"});",
+									"",
+									"// Store first item's fields into environment variables only when all safeguards pass",
+									"(function storeFirstItem() {",
+									"  if (pm.response.code !== 200) { return; }",
+									"  if (!data || !Array.isArray(data) || data.length === 0) { return; }",
+									"  const first = data[0] || {};",
+									"",
+									"  const showId = first.showId;",
+									"  const showName = first.showName;",
+									"  const auditoriumId = first.auditoriumId;",
+									"  const auditoriumName = first.auditoriumName;",
+									"",
+									"  // Only set env vars if each value is a non-empty string",
+									"  if (typeof showId === \"string\" && showId.length > 0) {",
+									"    pm.environment.set(\"showId\", showId);",
+									"  }",
+									"  if (typeof showName === \"string\" && showName.length > 0) {",
+									"    pm.environment.set(\"showName\", showName);",
+									"  }",
+									"  if (typeof auditoriumId === \"string\" && auditoriumId.length > 0) {",
+									"    pm.environment.set(\"auditoriumId\", auditoriumId);",
+									"  }",
+									"  if (typeof auditoriumName === \"string\" && auditoriumName.length > 0) {",
+									"    pm.environment.set(\"auditoriumName\", auditoriumName);",
+									"  }",
+									"})();"
+								],
+								"type": "text/javascript",
+								"packages": {},
+								"requests": {}
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Admin-Password",
+								"value": "{{admin-password}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/auditoriums",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"auditoriums"
+							]
+						},
+						"description": "Generated from cURL: curl --location 'http://localhost:8080/api/auditoriums/{auditoriumId}' --header 'X-Admin-Password: prarambh-admin-delhi'\r\n"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Total Seats",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Admin-Password",
+								"value": "{{admin-password}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/auditoriums/{{auditoriumId}}/total-seats",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"auditoriums",
+								"{{auditoriumId}}",
+								"total-seats"
+							]
+						},
+						"description": "Generated from cURL: curl --location 'http://localhost:8080/api/auditoriums/{auditoriumId}/total-seats' --header 'X-Admin-Password: prarambh-admin-delhi'\r\n"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Available Seats",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Admin-Password",
+								"value": "{{admin-password}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/auditoriums/{{auditoriumId}}/available-seats",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"auditoriums",
+								"{{auditoriumId}}",
+								"available-seats"
+							]
+						},
+						"description": "Generated from cURL: curl --location 'http://localhost:8080/api/auditoriums/{auditoriumId}/available-seats' --header 'X-Admin-Password: prarambh-admin-delhi'\r\n"
+					},
+					"response": []
+				},
+				{
+					"name": "Complete Replace by Auditorium Id",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "X-Admin-Password",
+								"value": "{{admin-password}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"showId\": \"SHOW-2025-001\",\r\n    \"auditoriumName\": \"Main Auditorium\",\r\n    \"showDate\": \"2025-12-30\",\r\n    \"showTime\": \"20:00:00\",\r\n    \"totalSeats\": 220,\r\n    \"reservedSeats\": 15\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auditoriums/{{auditoriumId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"auditoriums",
+								"{{auditoriumId}}"
+							]
+						},
+						"description": "Generated from cURL: curl --location --request PUT 'http://localhost:8080/api/auditoriums/{auditoriumId}' --header 'X-Admin-Password: prarambh-admin-delhi' --header 'Content-Type: application/json' --data '{\"showId\":\"SHOW-2025-001\",\"auditoriumName\":\"Main Auditorium\",\"showDate\":\"2025-12-30\",\"showTime\":\"20:00:00\",\"totalSeats\":220,\"reservedSeats\":15}'\r\n"
+					},
+					"response": []
+				},
+				{
+					"name": "Partial Update by Auditorium Id",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "X-Admin-Password",
+								"value": "{{admin-password}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"reservedSeats\": 10\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auditoriums/{{auditoriumId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"auditoriums",
+								"{{auditoriumId}}"
+							]
+						},
+						"description": "Generated from cURL: curl --location --request PATCH 'http://localhost:8080/api/auditoriums/{auditoriumId}' --header 'X-Admin-Password: prarambh-admin-delhi' --header 'Content-Type: application/json' --data '{\"reservedSeats\":25}'\r\n"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Auditorium by Auditorium Id",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "X-Admin-Password",
+								"value": "{{admin-password}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/auditoriums/{{auditoriumId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"auditoriums",
+								"{{auditoriumId}}"
+							]
+						},
+						"description": "Generated from cURL: curl --location --request DELETE 'http://localhost:8080/api/auditoriums/{auditoriumId}' --header 'X-Admin-Password: prarambh-admin-delhi'\r\n"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Donations",
+			"item": [
+				{
+					"name": "Create Donation",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"fullName\":\"Jane Doe\",\"phoneNumber\":\"+91-9916604905\",\"email\":\"jane.doe@example.com\",\"message\":\"Keep up the great work\",\"amount\":50.00}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/donations",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"donations"
+							]
+						},
+						"description": "Generated from cURL: curl -i -X POST \"http://localhost:8080/api/donations\" -H \"Content-Type: application/json\" -d '{\"fullName\":\"Jane Doe\",\"phoneNumber\":\"+91-9916604905\",\"email\":\"jane.doe@example.com\",\"message\":\"Keep up the great work\",\"amount\":50.00}'\r\n"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Donations",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/donations",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"donations"
+							]
+						},
+						"description": "Generated from cURL: curl -i -X GET \"http://localhost:8080/api/donations\"\r\n"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Donation by Id",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/donations/{{donationId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"donations",
+								"{{donationId}}"
+							]
+						},
+						"description": "Generated from cURL: curl -i -X GET \"http://localhost:8080/api/donations/1\"\r\n"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Donation by Phone",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "phoneNumber",
+									"value": "9916604905",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/donations/by-phone?phoneNumber={{phoneNumberDonations}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"donations",
+								"by-phone"
+							],
+							"query": [
+								{
+									"key": "phoneNumber",
+									"value": "{{phoneNumberDonations}}"
+								}
+							]
+						},
+						"description": "Generated from cURL: curl -i -G \"http://localhost:8080/api/donations/by-phone\" --data-urlencode \"phoneNumber=9916604905\"\r\n"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Donation by Name",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "fullName",
+									"value": "Jane",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/donations/by-name?fullName={{donationName}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"donations",
+								"by-name"
+							],
+							"query": [
+								{
+									"key": "fullName",
+									"value": "{{donationName}}"
+								}
+							]
+						},
+						"description": "Generated from cURL: curl -i -G \"http://localhost:8080/api/donations/by-name\" --data-urlencode \"fullName=Jane\"\r\n"
+					},
+					"response": []
+				},
+				{
+					"name": "Full Update Donations",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "X-Admin-Password",
+								"value": "{{admin-password}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"donorId\": \"U1001\",\r\n    \"amount\": 75.00,\r\n    \"note\": \"Replaced donation\",\r\n    \"date\": \"2026-01-01\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/donations/{{donationId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"donations",
+								"{{donationId}}"
+							]
+						},
+						"description": "Generated from cURL: curl -X PUT \"http://localhost:8080/api/donations/{id}\" \\\r\n  -H \"Content-Type: application/json\" \\\r\n  -H \"X-Admin-Password: your_admin_password\" \\\r\n  -d '{\"donorId\":\"U1001\",\"amount\":75.00,\"note\":\"Replaced donation\",\"date\":\"2026-01-01\"}'\r\n"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Donations",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "X-Admin-Password",
+								"value": "{{admin-password}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"amount\": 75.00, \"note\": \"Updated note\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/donations/{{donationId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"donations",
+								"{{donationId}}"
+							]
+						},
+						"description": "Generated from cURL: curl -X PATCH \"http://localhost:8080/api/donations/{id}\" \\\r\n  -H \"Content-Type: application/json\" \\\r\n  -H \"X-Admin-Password: your_admin_password\" \\\r\n  -d '{\"amount\": 75.00, \"note\": \"Updated note\"}'"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Donation by Id",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "X-Admin-Password",
+								"value": "{{admin-password}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/donations/{{donationId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"donations",
+								"{{donationId}}"
+							]
+						},
+						"description": "Generated from cURL: curl -i -X DELETE \"http://localhost:8080/api/donations/1\""
+					},
+					"response": []
+				},
+				{
+					"name": "Negative - Create Donation with Serial Number",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"serialNumber\": 999,\r\n    \"fullName\": \"Ignore Serial\",\r\n    \"phoneNumber\": \"9916604905\",\r\n    \"email\": \"ignore@example.com\",\r\n    \"message\": \"serial ignored\",\r\n    \"amount\": 5.00\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/donations",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"donations"
+							]
+						},
+						"description": "Generated from cURL: curl -i -X POST \"http://localhost:8080/api/donations\" -H \"Content-Type: application/json\" -d '{\"serialNumber\":999,\"fullName\":\"Ignore Serial\",\"phoneNumber\":\"9916604905\",\"email\":\"ignore@example.com\",\"message\":\"serial ignored\",\"amount\":5.00}'\r\n"
+					},
+					"response": []
+				},
+				{
+					"name": "Negative - Missing Full Name",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"phoneNumber\":\"+919916604905\",\"email\":\"no.name@example.com\",\"message\":\"No name\",\"amount\":10.00}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/donations",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"donations"
+							]
+						},
+						"description": "Generated from cURL: curl -i -X POST \"http://localhost:8080/api/donations\" -H \"Content-Type: application/json\" -d '{\"phoneNumber\":\"+919916604905\",\"email\":\"no.name@example.com\",\"message\":\"No name\",\"amount\":10.00}'\r\n"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Users",
+			"item": [
+				{
+					"name": "Create User",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "X-Admin-Password",
+								"value": "{{admin-password}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"userId\":\"jdoe\",\r\n    \"fullName\":\"John Doe\",\r\n    \"email\":\"jdoe@example.com\",\r\n    \"phoneNumber\":\"0712345678\"\r\n  }",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/users",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"users"
+							]
+						},
+						"description": "Generated from cURL: curl -i -X POST http://localhost:8080/api/users \\\r\n  -H \"Content-Type: application/json\" \\\r\n  -H \"X-Admin-Password: secret\" \\\r\n  -d '{\r\n    \"userId\":\"jdoe\",\r\n    \"fullName\":\"John Doe\",\r\n    \"email\":\"jdoe@example.com\",\r\n    \"phoneNumber\":\"0712345678\"\r\n  }'"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Users",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Admin-Password",
+								"value": "{{admin-password}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/users",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"users"
+							]
+						},
+						"description": "Generated from cURL: curl -i -X GET http://localhost:8080/api/users \\\r\n  -H \"X-Admin-Password: secret\""
+					},
+					"response": []
+				},
+				{
+					"name": "Get User by User Id",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Admin-Password",
+								"value": "{{admin-password}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/users/{{userId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"users",
+								"{{userId}}"
+							]
+						},
+						"description": "Generated from cURL: curl -i -X GET http://localhost:8080/api/users/jdoe \\\r\n  -H \"X-Admin-Password: secret\""
+					},
+					"response": []
+				},
+				{
+					"name": "Get User by Phone Number",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Admin-Password",
+								"value": "{{admin-password}}"
+							}
+						],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "phoneNumber",
+									"value": "0712345678",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/users/by-phone?phoneNumber={{phoneNumber}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"users",
+								"by-phone"
+							],
+							"query": [
+								{
+									"key": "phoneNumber",
+									"value": "{{phoneNumber}}"
+								}
+							]
+						},
+						"description": "Generated from cURL: curl -i -G http://localhost:8080/api/users/by-phone \\\r\n  -H \"X-Admin-Password: secret\" \\\r\n  --data-urlencode \"phoneNumber=0712345678\""
+					},
+					"response": []
+				},
+				{
+					"name": "Get User by Full Name",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Admin-Password",
+								"value": "{[admin-password}}"
+							}
+						],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "fullName",
+									"value": "{{name}}",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/users/by-name?fullName={{name}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"users",
+								"by-name"
+							],
+							"query": [
+								{
+									"key": "fullName",
+									"value": "{{name}}"
+								}
+							]
+						},
+						"description": "Generated from cURL: curl -i -G http://localhost:8080/api/users/by-name \\\r\n  -H \"X-Admin-Password: secret\" \\\r\n  --data-urlencode \"fullName=John Doe\""
+					},
+					"response": []
+				},
+				{
+					"name": "Delete All Users",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "X-Admin-Password",
+								"value": "{{admin-password}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/users/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"users",
+								""
+							]
+						},
+						"description": "Generated from cURL: curl -i -X DELETE http://localhost:8080/api/users/1 \\\r\n  -H \"X-Admin-Password: secret\""
+					},
+					"response": []
+				},
+				{
+					"name": "Delete User by User Id",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "X-Admin-Password",
+								"value": "{{admin-password}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/users/{{userId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"users",
+								"{{userId}}"
+							]
+						},
+						"description": "Generated from cURL: curl -i -X DELETE http://localhost:8080/api/users/1 \\\r\n  -H \"X-Admin-Password: secret\""
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Health",
+			"item": [
+				{
+					"name": "Actuator Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/actuator/health",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"actuator",
+								"health"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Collection-level pre-request script to generate a unique email value per run",
+					"// Base email local-part and domain",
+					"const baseLocal = 'aisha.khan+postman';",
+					"const domain = 'example.com';",
+					"const timestamp = Date.now();",
+					"const random = Math.floor(Math.random() * 100000);",
+					"const uniqueEmail = `${baseLocal}.${timestamp}.${random}@${domain}`;",
+					"pm.collectionVariables.set('uniqueEmail', uniqueEmail);"
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "ticketId",
+			"value": ""
+		},
+		{
+			"key": "barcodeId",
+			"value": ""
+		},
+		{
+			"key": "uniqueEmail",
+			"value": ""
+		},
+		{
+			"key": "checkinAttempt",
+			"value": ""
+		}
+	]
+}

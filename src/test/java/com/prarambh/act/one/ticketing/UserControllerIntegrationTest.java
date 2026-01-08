@@ -2,6 +2,7 @@ package com.prarambh.act.one.ticketing;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.prarambh.act.one.ticketing.support.TestAdminPasswordProvider;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,7 +38,7 @@ class UserControllerIntegrationTest {
     void createAndManageUser() {
         // Create
         Map created = client.post().uri("/api/users")
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", TestAdminPasswordProvider.adminPassword())
                 .bodyValue(Map.of(
                         "fullName", "Test User One",
                         "phoneNumber", "9876543210",
@@ -55,7 +56,7 @@ class UserControllerIntegrationTest {
 
         // Get by userId
         client.get().uri("/api/users/{userId}", userId)
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", TestAdminPasswordProvider.adminPassword())
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(Map.class)
@@ -63,7 +64,7 @@ class UserControllerIntegrationTest {
 
         // Update
         client.put().uri("/api/users/{id}", id)
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", TestAdminPasswordProvider.adminPassword())
                 .bodyValue(Map.of("fullName", "Updated Name"))
                 .exchange()
                 .expectStatus().isOk()
@@ -72,7 +73,7 @@ class UserControllerIntegrationTest {
 
         // Search by phone
         client.get().uri(uriBuilder -> uriBuilder.path("/api/users/by-phone").queryParam("phoneNumber", "9876543210").build())
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", TestAdminPasswordProvider.adminPassword())
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(List.class)
@@ -80,15 +81,14 @@ class UserControllerIntegrationTest {
 
         // Delete
         client.delete().uri("/api/users/{id}", id)
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", TestAdminPasswordProvider.adminPassword())
                 .exchange()
                 .expectStatus().isOk();
 
         // Verify deleted
         client.get().uri("/api/users/{userId}", userId)
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", TestAdminPasswordProvider.adminPassword())
                 .exchange()
                 .expectStatus().isNotFound();
     }
 }
-

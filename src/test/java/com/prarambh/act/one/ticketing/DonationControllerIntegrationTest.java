@@ -2,6 +2,7 @@ package com.prarambh.act.one.ticketing;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.prarambh.act.one.ticketing.support.TestAdminPasswordProvider;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -112,7 +113,7 @@ class DonationControllerIntegrationTest {
 
         // Delete with admin
         client.delete().uri("/api/donations/{id}", id)
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", TestAdminPasswordProvider.adminPassword())
                 .exchange()
                 .expectStatus().isOk();
 
@@ -123,4 +124,3 @@ class DonationControllerIntegrationTest {
                 .expectStatus().isNotFound();
     }
 }
-
