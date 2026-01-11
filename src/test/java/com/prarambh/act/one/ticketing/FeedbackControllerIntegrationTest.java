@@ -14,6 +14,8 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 @ActiveProfiles("test")
 class FeedbackControllerIntegrationTest {
 
+    private static final String ADMIN_PASSWORD = System.getenv().getOrDefault("ACTONE_ADMIN_PASSWORD", "test-admin-password");
+
     @LocalServerPort
     int port;
 
@@ -49,11 +51,10 @@ class FeedbackControllerIntegrationTest {
 
         client.get()
                 .uri("/api/feedback")
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", ADMIN_PASSWORD)
                 .exchange()
                 .expectStatus().isOk()
                 .expectBodyList(Map.class)
                 .value(list -> assertThat(list.size()).isGreaterThanOrEqualTo(1));
     }
 }
-

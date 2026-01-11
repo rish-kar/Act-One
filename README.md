@@ -72,7 +72,11 @@ Prereqs:
 1) Build and run the app locally (dev profile uses H2 and local resources):
 
 ```bash
-# Build (optional)
+
+# Set Admin Password before build (Powershell Commands)
+$env:ACTONE_ADMIN_PASSWORD:"<admin-password>"
+
+# Build 
 mvn clean package
 
 # Run in dev profile (default)
@@ -90,7 +94,7 @@ exercise card generation.
 ## API examples & handy curl snippets
 
 Authentication model for admin endpoints: a shared-secret header `X-Admin-Password` which must
-match `ACTONE_ADMIN_PASSWORD` in the environment (or it will be rejected with `403`). This is
+match the `ACTONE_ADMIN_PASSWORD` environment variable (supply it at runtime; not committed to the repo). This is
 intended for internal/dev use only — not a substitute for real auth.
 
 Create a user (admin-only):
@@ -98,7 +102,7 @@ Create a user (admin-only):
 ```bash
 curl -X POST 'http://localhost:8080/api/users' \
   -H 'Content-Type: application/json' \
-  -H 'X-Admin-Password: prarambh-admin-delhi' \
+  -H "X-Admin-Password: $ACTONE_ADMIN_PASSWORD" \
   --data '{"fullName":"John Doe","phoneNumber":"9876543210","email":"john@example.com"}'
 ```
 
@@ -106,14 +110,14 @@ Delete a single user (admin-only):
 
 ```bash
 curl -X DELETE 'http://localhost:8080/api/users/123' \
-  -H 'X-Admin-Password: prarambh-admin-delhi'
+  -H "X-Admin-Password: $ACTONE_ADMIN_PASSWORD"
 ```
 
 Delete ALL users (admin-only) — careful with this one:
 
 ```bash
 curl --location --request DELETE 'http://localhost:8080/api/users/' \
-  --header 'X-Admin-Password: prarambh-admin-delhi'
+  --header "X-Admin-Password: $ACTONE_ADMIN_PASSWORD"
 ```
 
 Resend ticket-issue email by full name + transactionId (admin-only). This endpoint will:
@@ -123,7 +127,7 @@ Resend ticket-issue email by full name + transactionId (admin-only). This endpoi
 
 ```bash
 curl --location --request POST 'http://localhost:8080/api/resend-email/by-name-and-transaction?fullName=John%20Doe&transactionId=TXN-1234' \
-  --header 'X-Admin-Password: prarambh-admin-delhi'
+  --header "X-Admin-Password: $ACTONE_ADMIN_PASSWORD"
 ```
 
 Issue tickets (public-facing; returns the created ticket rows):
@@ -306,6 +310,7 @@ If you hit a deployment roadblock or want a CI pipeline added, tell me which pro
 
 ## Appendix: quick reference commands
 
+- Set Admin Environment Variable: `$env:ACTONE_ADMIN_PASSWORD="<admin-password>"`
 - Build JAR: `mvn clean package`
 - Run (dev): `mvn spring-boot:run`
 - Docker build: `docker build -t act-one:latest .`
@@ -315,5 +320,3 @@ If you hit a deployment roadblock or want a CI pipeline added, tell me which pro
 
 
 ---
-
-End of README — enjoy shipping shows!
