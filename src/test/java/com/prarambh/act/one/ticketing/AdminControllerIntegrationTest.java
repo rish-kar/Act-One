@@ -14,6 +14,8 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 @ActiveProfiles("test")
 class AdminControllerIntegrationTest {
 
+    private static final String ADMIN_PASSWORD = System.getenv().getOrDefault("ACTONE_ADMIN_PASSWORD", "test-admin-password");
+
     @LocalServerPort
     int port;
 
@@ -38,7 +40,7 @@ class AdminControllerIntegrationTest {
     void manageShowName() {
         // Set show name
         client.post().uri("/api/admin/show-name")
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", ADMIN_PASSWORD)
                 .bodyValue(Map.of("showName", "Admin Test Show", "showDate", "2025-12-31", "showTime", "18:00"))
                 .exchange()
                 .expectStatus().isOk()
@@ -50,7 +52,7 @@ class AdminControllerIntegrationTest {
 
         // Get show name
         client.get().uri("/api/admin/show-name")
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", ADMIN_PASSWORD)
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(Map.class)
@@ -58,14 +60,14 @@ class AdminControllerIntegrationTest {
 
         // Clear show name
         client.post().uri("/api/admin/show-name")
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", ADMIN_PASSWORD)
                 .bodyValue(Map.of("clear", true))
                 .exchange()
                 .expectStatus().isOk();
 
         // Verify cleared
         client.get().uri("/api/admin/show-name")
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", ADMIN_PASSWORD)
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(Map.class)
@@ -89,7 +91,7 @@ class AdminControllerIntegrationTest {
 
         // Purge
         client.delete().uri("/api/admin/tickets")
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", ADMIN_PASSWORD)
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(Map.class)

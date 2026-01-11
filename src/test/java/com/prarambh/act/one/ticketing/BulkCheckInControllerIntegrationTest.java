@@ -14,6 +14,8 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 @ActiveProfiles("test")
 class BulkCheckInControllerIntegrationTest {
 
+    private static final String ADMIN_PASSWORD = System.getenv().getOrDefault("ACTONE_ADMIN_PASSWORD", "test-admin-password");
+
     @LocalServerPort
     int port;
 
@@ -69,7 +71,7 @@ class BulkCheckInControllerIntegrationTest {
 
         // Validate
         client.post().uri("/api/transactions/{userId}/validate", userId)
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", ADMIN_PASSWORD)
                 .exchange()
                 .expectStatus().isOk();
 

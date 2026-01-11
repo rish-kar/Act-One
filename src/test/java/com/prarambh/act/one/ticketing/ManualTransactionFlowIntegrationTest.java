@@ -15,6 +15,8 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 @ActiveProfiles("test")
 class ManualTransactionFlowIntegrationTest {
 
+    private static final String ADMIN_PASSWORD = System.getenv().getOrDefault("ACTONE_ADMIN_PASSWORD", "test-admin-password");
+
     @LocalServerPort
     int port;
 
@@ -58,7 +60,7 @@ class ManualTransactionFlowIntegrationTest {
         // 2) list successful transactions includes this userId
         List<Map> list = webTestClient.get()
                 .uri("/api/transactions/successful")
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", ADMIN_PASSWORD)
                 .exchange()
                 .expectStatus().isOk()
                 .expectBodyList(Map.class)

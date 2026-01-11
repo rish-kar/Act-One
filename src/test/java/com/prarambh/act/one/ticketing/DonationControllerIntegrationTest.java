@@ -15,6 +15,8 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 @ActiveProfiles("test")
 class DonationControllerIntegrationTest {
 
+    private static final String ADMIN_PASSWORD = System.getenv().getOrDefault("ACTONE_ADMIN_PASSWORD", "test-admin-password");
+
     @LocalServerPort
     int port;
 
@@ -112,7 +114,7 @@ class DonationControllerIntegrationTest {
 
         // Delete with admin
         client.delete().uri("/api/donations/{id}", id)
-                .header("X-Admin-Password", "prarambh-admin-delhi")
+                .header("X-Admin-Password", ADMIN_PASSWORD)
                 .exchange()
                 .expectStatus().isOk();
 
