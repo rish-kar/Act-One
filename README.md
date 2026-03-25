@@ -1,7 +1,7 @@
 # Act One — Ticketing Backend
 
 Welcome to Act One — the small, pragmatic ticketing backend that powers Prarambh Theatre's shows.
-This README tells the story of the product from the viewpoint of the operator: how a ticket request
+The following is a working scenario of a product from the viewpoint of the operator: how a ticket request
 is recorded, how a volunteer validates and issues tickets, how attendees check-in at the door,
 and how the system composes and delivers beautiful ticket cards by email.
 
@@ -236,8 +236,6 @@ A simple workflow you can add to automatically build/test/package and push to Ar
   - docker push
   - gcloud run deploy (optional)
 
-If you'd like, I can add a ready-to-use `.github/workflows/ci-deploy.yml` that does the above
-with careful secrets handling.
 
 ---
 
@@ -298,13 +296,6 @@ with careful secrets handling.
 - Move sensitive config to Secret Manager and enable Workload Identity for Cloud Run.
 - Add an HTML email template (Thymeleaf) for nicer customer-facing emails while keeping
   a plaintext fallback.
-
----
-
-## Contact & help
-
-If you hit a deployment roadblock or want a CI pipeline added, tell me which provider you use
-(GitHub Actions, GitLab CI, Jenkins) and I will add a tested workflow.
 
 ---
 
